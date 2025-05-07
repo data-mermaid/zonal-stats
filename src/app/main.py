@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from mangum import Mangum
 
 from .api.endpoints import router
 
@@ -29,3 +30,7 @@ async def root():
         "docs_url": "/docs",
         "redoc_url": "/redoc",
     }
+
+
+# Create handler for AWS Lambda
+handler = Mangum(app)
