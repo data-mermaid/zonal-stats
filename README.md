@@ -1,71 +1,131 @@
-# ZonalStats API
+# Zonal Statistics API
 
+A FastAPI application that calculates zonal statistics from raster data using GeoJSON geometries.
 
-## Method
+> For the initial requirements and specifications, see [specs.md](specs.md)
 
-`POST`
+## Features
 
+- Calculate zonal statistics (min, max, mean, count, sum, std, median, majority, minority, unique, range, nodata, area, freq_hist)
+- Support for COG (Cloud Optimized GeoTIFF) raster data
+- Input validation using Pydantic models
+- Docker containerization for easy deployment
+- AWS Lambda compatible
 
-## Request Payload
+## API Endpoints
 
-```
+### POST /api/v1/zonal-stats
 
-`aoi`: <geojson geometry; valid geojson and valid geometry.  Polygon or Multipolygon>
+Calculate zonal statistics for a given area of interest and raster data.
 
-`image`: {
-    `url`: <url to COG (or other cloud native format)>,
-    `bands`: <list of band indices; default to band 1>,
-    `approx_stats`: <true/false; default to true
- }
+#### Request Body
 
-`stac`: {
-    `url`: <url to STAC item>,
-    `asset`: <asset id; default: guess which asset else exception>,
-    `bands`: <list of band indices; default to band 1>,
-    `approx_stats`: <true/false; default to true>
-}
-
-`stats`: <list of stats type to calculate>
-    options: "area", "count", "max", "mean", "median", "min", "std_dev", "sum", "freq_hist"
-    default: "area", "count", "max", "mean", "median", "min", "std_dev", "sum"  
-
-```
-
-## Response
-
-Here's a sample response but if there's a clearer, simpler way of representing the results this can be changed.
-
-```
+```json
 {
-    "<band x>::{
-        "area": <Area of raster with the AOI>,
-        "count": <number>,
-        "max": <number>,
-        "mean": <number>,
-        "median": <number>,
-        "min": <number>,
-        "std_dev": <number>,
-        "sum": <number>
-    }
+  "aoi": {
+    "type": "Polygon",
+    "coordinates": [[[x1, y1], [x2, y2], ...]]
+  },
+  "stats": ["min", "max", "mean", "count", "sum", "std", "median", "majority", "minority", "unique", "range", "nodata", "area", "freq_hist"],  // optional
+  "image": {
+    "url": "https://example.com/image.tif",
+    "bands": [1],  // optional
+    "approx_stats": true  // optional
+  }
 }
 ```
 
+#### Response
 
-## Notes
+```json
+{
+  "band_1": {
+    "min": 10.0,
+    "max": 50.0,
+    "mean": 25.5,
+    "count": 100,
+    "sum": 2550.0,
+    "std": 5.2,
+    "median": 25.0,
+    "majority": 24.0,
+    "minority": 11.0,
+    "unique": 15,
+    "range": 40.0,
+    "nodata": 0,
+    "area": 1000.0,
+    "freq_hist": { ... }
+  }
+}
+```
 
-* The expectation that the zonal stats are calculated dynamically.
-* aoi is required
-* image or stac is required.  If both are added raise 400 error
-    
-    * prioritize support for `image` in the request parameters
-* `approx_stats`: Will use overviews in the case of COG to calculate zonal stats.
-* Rate limit and quotas:
-    
-    * Limit on polygon size (TBD: number of vertices, area, other??)
+## Development
 
-* keep docker image small
-* FastAPI based
-* will be running on a lambda
-* no need to for any devops setup (CDK, other)
+### Prerequisites
 
+- Python 3.10+
+- Docker (for containerized deployment)
+- uv (recommended for dependency management)
 
+### Local Development
+
+1. Create a virtual environment:
+
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   pip install -e .
+   ```
+
+3. Run the development server:
+
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
+### Docker Deployment
+
+1. Build the Docker image:
+
+   ```bash
+   docker build -t zonal-stats-api .
+   ```
+
+2. Run the container:
+
+   ```bash
+   docker run -p 8000:8000 zonal-stats-api
+   ```
+
+## Development Tools
+
+The project uses several development tools to maintain code quality:
+
+- `ruff` for linting and formatting
+- `pre-commit` for git hooks
+- `pytest` for testing
+
+To set up the development tools:
+
+```bash
+# Install pre-commit hooks
+pre-commit install
+
+# Run tests
+pytest
+```
+
+## API Documentation
+
+Once the server is running, you can access:
+
+- Swagger UI documentation at `/docs`
+- ReDoc documentation at `/redoc`
+
+## License
+
+MIT
