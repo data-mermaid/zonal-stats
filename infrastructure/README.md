@@ -1,58 +1,164 @@
+# Zonal Statistics Infrastructure
 
-# Welcome to your CDK Python project!
+This directory contains the AWS CDK infrastructure code for deploying the Zonal Statistics API. The infrastructure includes:
 
-This is a blank project for CDK development with Python.
+- AWS Lambda function for processing zonal statistics
+- API Gateway for HTTP endpoints
+- Lambda Layer for dependencies
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+## Prerequisites
 
-This project is set up like a standard Python project.  The initialization
-process also creates a virtualenv within this project, stored under the `.venv`
-directory.  To create the virtualenv it assumes that there is a `python3`
-(or `python` for Windows) executable in your path with access to the `venv`
-package. If for any reason the automatic creation of the virtualenv fails,
-you can create the virtualenv manually.
+1. Install AWS CDK:
 
-To manually create a virtualenv on MacOS and Linux:
-
-```
-$ python3 -m venv .venv
+```bash
+npm install -g aws-cdk
 ```
 
-After the init process completes and the virtualenv is created, you can use the following
-step to activate your virtualenv.
+2. Install Python dependencies:
 
-```
-$ source .venv/bin/activate
-```
-
-If you are a Windows platform, you would activate the virtualenv like this:
-
-```
-% .venv\Scripts\activate.bat
+```bash
+pip install -r requirements.txt
 ```
 
-Once the virtualenv is activated, you can install the required dependencies.
+3. Configure AWS credentials:
 
-```
-$ pip install -r requirements.txt
-```
-
-At this point you can now synthesize the CloudFormation template for this code.
-
-```
-$ cdk synth
+```bash
+aws configure
 ```
 
-To add additional dependencies, for example other CDK libraries, just add
-them to your `setup.py` file and rerun the `pip install -r requirements.txt`
-command.
+## Creating the Lambda Layer
 
-## Useful commands
+The Lambda layer contains all the Python dependencies required by the Lambda function. To create the layer:
 
- * `cdk ls`          list all stacks in the app
- * `cdk synth`       emits the synthesized CloudFormation template
- * `cdk deploy`      deploy this stack to your default AWS account/region
- * `cdk diff`        compare deployed stack with current state
- * `cdk docs`        open CDK documentation
+1. Navigate to the infrastructure directory:
 
-Enjoy!
+```bash
+cd infrastructure
+```
+
+2. Make the build script executable:
+
+```bash
+chmod +x build_layer.sh
+```
+
+3. Run the build script:
+
+```bash
+./build_layer.sh
+```
+
+This script will:
+
+- Create a temporary directory for building the layer
+- Install all required dependencies into this directory
+- Create a zip file containing the dependencies
+- Clean up temporary files
+
+The resulting `lambda_layer.zip` will be created in the `lambda_layer` directory and will be used by CDK during deployment.
+
+## Project Structure
+
+```
+infrastructure/
+├── app.py                 # CDK app entry point
+├── infrastructure/        # CDK stack definition
+│   └── infrastructure_stack.py
+├── lambda_layer/         # Lambda layer dependencies
+    └── lambda_layer.zip
+```
+
+## Deployment Steps
+
+1. Create and activate a Python virtual environment:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+2. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Bootstrap your AWS environment (first time only):
+
+```bash
+cdk bootstrap
+```
+
+4. Deploy the stack:
+
+```bash
+cdk deploy
+```
+
+## Testing the Lambda Function
+
+When testing the Lambda function directly (not through API Gateway), use the following payload format:
+
+```json
+{
+  "version": "2.0",
+  "routeKey": "POST /api/v1/calculate",
+  "rawPath": "/api/v1/calculate",
+  "rawQueryString": "",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "requestContext": {
+    "http": {
+      "method": "POST",
+      "path": "/api/v1/calculate",
+      "sourceIp": "127.0.0.1",
+      "protocol": "HTTP/1.1"
+    },
+    "timeEpoch": 1715168181315
+  },
+  "body": "{\"aoi\":{\"type\":\"Polygon\",\"coordinates\":[[[-4.147933860088441,52.654908861230659],[-4.033329348900527,52.653715064239123],[-4.018207920341011,52.5681596131787],[-4.082672957884212,52.554629913941234],[-4.143556604452791,52.552640252288668],[-4.147933860088441,52.654908861230659]]]},\"stats\":[\"count\",\"mean\",\"min\",\"max\"],\"image\":{\"url\":\"https://geodowd-test-data.s3.eu-west-1.amazonaws.com/cogs/random_global_raster_cog_001.tif\"}}"
+}
+```
+
+## Infrastructure Components
+
+### Lambda Function
+
+- Runtime: Python 3.11
+- Memory: 2048 MB
+- Timeout: 300 seconds
+- Handler: app.main.handler
+
+### API Gateway
+
+- REST API
+- Stage: v1
+- Logging: INFO level
+- CORS enabled
+
+### Lambda Layer
+
+Contains all Python dependencies required by the Lambda function.
+
+## Cleanup
+
+To destroy the infrastructure:
+
+```bash
+cdk destroy
+```
+
+## Troubleshooting
+
+1. If you encounter deployment issues, check the CloudFormation console for detailed error messages.
+
+2. For Lambda function issues:
+   - Check CloudWatch Logs for the Lambda function
+   - Verify the Lambda layer contains all required dependencies
+   - Ensure the Lambda function has appropriate IAM permissions
+
+3. For API Gateway issues:
+   - Verify the API Gateway integration with Lambda
+   - Check API Gateway logs in CloudWatch
+   - Test the API endpoint using the provided test payload format

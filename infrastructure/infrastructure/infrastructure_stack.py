@@ -15,14 +15,14 @@ from constructs import Construct
 class InfrastructureStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
-
-        # The code that defines your stack goes here
-
-        # example resource
-        # queue = sqs.Queue(
-        #     self, "InfrastructureQueue",
-        #     visibility_timeout=Duration.seconds(300),
-        # )
+        # Create Lambda layer for all dependencies
+        lambda_layer = _lambda.LayerVersion(
+            self,
+            "ZonalStatsLayer",
+            code=_lambda.Code.from_asset("lambda_layer/lambda_layer.zip"),
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_11],
+            description="Layer containing all dependencies for zonal statistics API",
+        )
 
         # Create Lambda function
         lambda_function = _lambda.Function(
@@ -32,10 +32,11 @@ class InfrastructureStack(Stack):
             code=_lambda.Code.from_asset("../src"),
             handler="app.main.handler",
             environment={
-                "PYTHONPATH": "/var/task",
+                "PYTHONPATH": "/var/task:/opt/python",
             },
             timeout=Duration.seconds(300),
-            memory_size=1024,
+            memory_size=2048,
+            layers=[lambda_layer],
         )
 
         # Create API Gateway

@@ -101,6 +101,15 @@ Calculate zonal statistics for a given area of interest and raster data.
    docker run -p 8000:8000 zonal-stats-api
    ```
 
+### AWS Deployment
+
+For deploying the application to AWS using CDK, see the [Infrastructure README](infrastructure/README.md) for detailed instructions on:
+
+- Setting up the AWS environment
+- Creating the Lambda layer
+- Deploying the infrastructure
+- Testing the deployed API
+
 ## Development Tools
 
 The project uses several development tools to maintain code quality:
