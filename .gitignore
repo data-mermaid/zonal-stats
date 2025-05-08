@@ -39,3 +39,14 @@ Thumbs.db
 data/
 *.log 
 .venv/
+infrastructure/lambda_layer/lambda_layer.zip
+
+*.swp
+package-lock.json
+__pycache__
+.pytest_cache
+*.egg-info
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
