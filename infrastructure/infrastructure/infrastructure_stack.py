@@ -7,7 +7,13 @@ from aws_cdk import (
     aws_apigateway as apigw,
 )
 from aws_cdk import (
+    aws_iam as iam,
+)
+from aws_cdk import (
     aws_lambda as _lambda,
+)
+from aws_cdk import (
+    aws_logs as logs,
 )
 from constructs import Construct
 
@@ -15,6 +21,19 @@ from constructs import Construct
 class InfrastructureStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # Create CloudWatch Logs role for API Gateway
+        cloudwatch_role = iam.Role(
+            self,
+            "ApiGatewayCloudWatchRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                )
+            ],
+        )
+
         # Create Lambda layer for all dependencies
         lambda_layer = _lambda.LayerVersion(
             self,
@@ -48,7 +67,27 @@ class InfrastructureStack(Stack):
             deploy_options=apigw.StageOptions(
                 stage_name="v1",
                 logging_level=apigw.MethodLoggingLevel.INFO,
+                access_log_destination=apigw.LogGroupLogDestination(
+                    logs.LogGroup(
+                        self,
+                        "ApiGatewayAccessLogs",
+                        log_group_name=f"/aws/apigateway/{construct_id}/access-logs",
+                        retention=logs.RetentionDays.ONE_MONTH,
+                    )
+                ),
+                access_log_format=apigw.AccessLogFormat.json_with_standard_fields(
+                    caller=True,
+                    http_method=True,
+                    ip=True,
+                    protocol=True,
+                    request_time=True,
+                    resource_path=True,
+                    response_length=True,
+                    status=True,
+                    user=True,
+                ),
             ),
+            cloud_watch_role=True,
         )
 
         # Create API Gateway integration with Lambda
