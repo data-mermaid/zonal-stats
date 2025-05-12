@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 import rasterio
+import requests
 from pyproj import CRS
 from rasterio.warp import transform_geom
 from rasterstats import zonal_stats
@@ -11,6 +12,33 @@ from ..models.schemas import BandStats, StatType
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def get_stac_asset_url(stac_url: str, asset_key: str | None = None) -> str:
+    """
+    Fetch a STAC item from the given URL and extract the asset URL (href)
+    for the specified asset key.
+    If asset_key is None, use the first asset in the item.
+    """
+    logger.info(f"Fetching STAC item from {stac_url}")
+    resp = requests.get(stac_url)
+    resp.raise_for_status()
+    stac_item = resp.json()
+    assets = stac_item.get("assets", {})
+    if not assets:
+        raise ValueError("No assets found in the STAC item.")
+    if asset_key:
+        asset = assets.get(asset_key)
+        if not asset:
+            raise ValueError(f"Asset '{asset_key}' not found in the STAC item.")
+    else:
+        # Use the first asset if no key is provided
+        asset = next(iter(assets.values()))
+    href = asset.get("href")
+    logger.info(f"Asset href: {href}")
+    if not href:
+        raise ValueError("Asset does not contain an 'href' field.")
+    return href
 
 
 class ZonalStatsService:

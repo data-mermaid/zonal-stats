@@ -16,6 +16,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "pyproj>=3.7.1",
     "mangum>=0.17.0",
+    "requests",
 ]
 
 [tool.ruff]
