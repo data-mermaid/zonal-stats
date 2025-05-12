@@ -54,7 +54,7 @@ class InfrastructureStack(Stack):
                 "PYTHONPATH": "/var/task:/opt/python",
             },
             timeout=Duration.seconds(300),
-            memory_size=2048,
+            memory_size=10240,
             layers=[lambda_layer],
         )
 
@@ -89,6 +89,16 @@ class InfrastructureStack(Stack):
             ),
             cloud_watch_role=True,
         )
+
+        # Create usage plan with rate limiting
+        usage_plan = api.add_usage_plan(
+            "ZonalStatsUsagePlan",
+            name="ZonalStatsUsagePlan",
+            throttle=apigw.ThrottleSettings(burst_limit=10, rate_limit=1),
+        )
+
+        # Associate the usage plan with the API stage
+        usage_plan.add_api_stage(stage=api.deployment_stage)
 
         # Create API Gateway integration with Lambda
         integration = apigw.LambdaIntegration(
