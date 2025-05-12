@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from ..models.schemas import ZonalStatsRequest, ZonalStatsResponse
-from ..services.zonal_stats import ZonalStatsService
+from ..services.zonal_stats import ZonalStatsService, get_stac_asset_url
 
 router = APIRouter()
 
@@ -28,10 +28,11 @@ async def calculate_zonal_stats(request: ZonalStatsRequest):
         bands = request.image.bands
         approx_stats = request.image.approx_stats
     elif request.stac:
-        # For now, just raise an error as STAC support is stubbed
-        raise HTTPException(
-            status_code=501, detail="STAC support is not yet implemented"
-        )
+        # Log that STAC input is being processed
+        logger.info(f"Processing STAC input with URL: {request.stac.url} and asset: {request.stac.asset}")
+        url = get_stac_asset_url(request.stac.url, request.stac.asset)
+        bands = request.stac.bands
+        approx_stats = request.stac.approx_stats
     else:
         raise HTTPException(
             status_code=400,
