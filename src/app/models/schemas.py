@@ -29,14 +29,14 @@ class StatType(str, Enum):
 class ImageConfig(BaseModel):
     url: str
     bands: list[int] = Field(default=[1])
-    approx_stats: bool = Field(default=True)
+    approx_stats: bool = Field(default=False)
 
 
 class StacConfig(BaseModel):
     url: str
     asset: str | None = None
     bands: list[int] = Field(default=[1])
-    approx_stats: bool = Field(default=True)
+    approx_stats: bool = Field(default=False)
 
 
 class ZonalStatsRequest(BaseModel):

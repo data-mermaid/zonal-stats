@@ -8,6 +8,8 @@ A FastAPI application that calculates zonal statistics from raster data using Ge
 
 - Calculate zonal statistics (min, max, mean, count, sum, std, median, majority, minority, unique, range, nodata, area, freq_hist)
 - Support for COG (Cloud Optimized GeoTIFF) raster data
+- Support for STAC (SpatioTemporal Asset Catalog) items
+- Optional approximate statistics using overviews for better performance
 - Input validation using Pydantic models
 - Docker containerization for easy deployment
 - AWS Lambda compatible
@@ -20,6 +22,8 @@ Calculate zonal statistics for a given area of interest and raster data.
 
 #### Request Body
 
+You can provide either an image URL or a STAC item URL, but not both:
+
 ```json
 {
   "aoi": {
@@ -29,8 +33,26 @@ Calculate zonal statistics for a given area of interest and raster data.
   "stats": ["min", "max", "mean", "count", "sum", "std", "median", "majority", "minority", "unique", "range", "nodata", "area", "freq_hist"],  // optional
   "image": {
     "url": "https://example.com/image.tif",
-    "bands": [1],  // optional
-    "approx_stats": true  // optional
+    "bands": [1],  // optional, defaults to [1]
+    "approx_stats": false  // optional, defaults to false
+  }
+}
+```
+
+Or using a STAC item:
+
+```json
+{
+  "aoi": {
+    "type": "Polygon",
+    "coordinates": [[[x1, y1], [x2, y2], ...]]
+  },
+  "stats": ["min", "max", "mean", "count"],
+  "stac": {
+    "url": "https://example.com/stac/item.json",
+    "asset": "cog",  // optional, defaults to first asset
+    "bands": [1, 2, 3],  // optional, defaults to [1]
+    "approx_stats": false  // optional, defaults to false
   }
 }
 ```
@@ -57,6 +79,27 @@ Calculate zonal statistics for a given area of interest and raster data.
   }
 }
 ```
+
+## Features in Detail
+
+### Approximate Statistics
+
+When `approx_stats` is set to `true`, the API may use lower-resolution overviews of the raster data to improve performance. This is particularly useful for large areas of interest. The system automatically selects an appropriate overview level based on the size of the area being processed, ensuring a balance between performance and accuracy. By default, `approx_stats` is set to `false` to ensure maximum accuracy.
+
+### STAC Support
+
+The API supports processing data from STAC items. When using a STAC item:
+
+1. Provide the STAC item URL in the `stac.url` field
+2. Optionally specify which asset to use in `stac.asset` (defaults to the first asset)
+3. Specify which bands to process in `stac.bands` (defaults to band 1)
+4. Control approximate statistics with `stac.approx_stats` (defaults to false)
+
+The API will:
+
+1. Fetch the STAC item
+2. Extract the asset URL
+3. Process the data using the same zonal statistics calculation as direct image URLs
 
 ## Development
 
