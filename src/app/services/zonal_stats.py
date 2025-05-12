@@ -37,7 +37,10 @@ def get_stac_asset_url(stac_url: str, asset_key: str | None = None) -> str:
     href = asset.get("href")
     logger.info(f"Asset href: {href}")
     if not href:
-        raise ValueError("Asset does not contain an 'href' field.")
+        if asset_key:
+            raise ValueError(f"Asset '{asset_key}' does not contain an 'href' field.")
+        else:
+            raise ValueError("The first asset does not contain an 'href' field.")
     return href
 
 
