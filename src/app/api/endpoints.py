@@ -28,6 +28,8 @@ async def calculate_zonal_stats(request: ZonalStatsRequest):
         bands = request.image.bands
         approx_stats = request.image.approx_stats
     elif request.stac:
+        # Log that STAC input is being processed
+        logger.info(f"Processing STAC input with URL: {request.stac.url} and asset: {request.stac.asset}")
         url = get_stac_asset_url(request.stac.url, request.stac.asset)
         bands = request.stac.bands
         approx_stats = request.stac.approx_stats
