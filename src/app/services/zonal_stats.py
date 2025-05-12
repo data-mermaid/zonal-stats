@@ -14,6 +14,11 @@ from ..models.schemas import BandStats, StatType
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Maximum allowed area in square kilometers
+MAX_AREA_KM2 = 1000000  # 1 million square kilometers
+# Maximum allowed number of pixels
+MAX_PIXELS = 100000000  # 100 million pixels
+
 
 def get_stac_asset_url(stac_url: str, asset_key: str | None = None) -> str:
     """
@@ -54,6 +59,29 @@ class ZonalStatsService:
     def _process_stats_list(self, stats: list[StatType]) -> list[str]:
         """Process the list of statistics."""
         return [stat.value for stat in stats]
+
+    def _validate_area(self, shapely_geom: Polygon | MultiPolygon) -> None:
+        """Validate that the area is within acceptable limits."""
+        # Calculate area in square kilometers
+        area_km2 = (
+            shapely_geom.area / 1000000
+        )  # Convert from square meters to square kilometers
+        logger.info(f"Area of geometry: {area_km2:.2f} km²")
+
+        if area_km2 > MAX_AREA_KM2:
+            raise ValueError(
+                f"Area too large: {area_km2:.2f} km². Maximum allowed area is {MAX_AREA_KM2} km²"
+            )
+
+    def _validate_pixel_count(self, window: rasterio.windows.Window) -> None:
+        """Validate that the number of pixels is within acceptable limits."""
+        total_pixels = window.width * window.height
+        logger.info(f"Total pixels in window: {total_pixels}")
+
+        if total_pixels > MAX_PIXELS:
+            raise ValueError(
+                f"Too many pixels: {total_pixels}. Maximum allowed pixels is {MAX_PIXELS}"
+            )
 
     def _get_overview_level(
         self, src: rasterio.io.DatasetReader, window: rasterio.windows.Window
@@ -114,6 +142,10 @@ class ZonalStatsService:
         shapely_geom = shape(geometry)
         logger.info(f"Processing geometry: {shapely_geom.bounds}")
 
+        # Only validate area if not using approximate stats
+        if not self.approx_stats:
+            self._validate_area(shapely_geom)
+
         # Open the raster and read only the required portion
         with rasterio.open(self.url) as src:
             # Get the source CRS
@@ -142,6 +174,10 @@ class ZonalStatsService:
 
             # Get the window for the geometry bounds
             window = src.window(minx, miny, maxx, maxy)
+
+            # Only validate pixel count if not using approximate stats
+            if not self.approx_stats:
+                self._validate_pixel_count(window)
 
             # Determine if we should use overviews
             overview_level = self._get_overview_level(src, window)
