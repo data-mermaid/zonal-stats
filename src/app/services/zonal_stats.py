@@ -1,4 +1,5 @@
 import logging
+import math
 
 import numpy as np
 import rasterio
@@ -54,6 +55,58 @@ class ZonalStatsService:
         """Process the list of statistics."""
         return [stat.value for stat in stats]
 
+    def _get_overview_level(
+        self, src: rasterio.io.DatasetReader, window: rasterio.windows.Window
+    ) -> int:
+        """
+        Determine the appropriate overview level based on the window size.
+        Returns the overview level to use (0 means no overview).
+        """
+        if not self.approx_stats:
+            return 0
+
+        # Get the window size in pixels
+        window_width = window.width
+        window_height = window.height
+
+        # Get available overviews
+        overviews = src.overviews(1)  # Check overviews for band 1
+        if not overviews:
+            logger.info("No overviews available, using full resolution")
+            return 0
+
+        # Calculate the total number of pixels in the window
+        total_pixels = window_width * window_height
+        logger.info(
+            f"Window size: {window_width}x{window_height} = {total_pixels} pixels"
+        )
+
+        threshold = 100_000_000
+        for level, factor in enumerate(overviews):
+            # Calculate the effective resolution at this overview level
+            effective_pixels = total_pixels / (factor * factor)
+            logger.info(
+                f"Overview level {level} (factor: {factor}): {effective_pixels:.0f} effective pixels"
+            )
+
+            # Only use this overview if it would result in at least 1 million pixels
+            if effective_pixels < 1_000_000:
+                logger.info(
+                    f"Overview level {level} would result in too few pixels ({effective_pixels:.0f}), using previous level"
+                )
+                return max(0, level - 1)
+
+            # If we're still above the threshold, continue to next level
+            if total_pixels > threshold * (1.2**level):  # More gradual increase
+                continue
+
+            logger.info(f"Selected overview level {level} (factor: {factor})")
+            return level
+
+        # If we get here, use the highest available overview
+        logger.info(f"Using highest available overview level {len(overviews) - 1}")
+        return len(overviews) - 1
+
     def calculate_stats(
         self, geometry: dict, stats: list[StatType]
     ) -> dict[str, BandStats]:
@@ -87,16 +140,42 @@ class ZonalStatsService:
             # Get the bounds of the geometry
             minx, miny, maxx, maxy = shapely_geom.bounds
 
+            # Get the window for the geometry bounds
+            window = src.window(minx, miny, maxx, maxy)
+
+            # Determine if we should use overviews
+            overview_level = self._get_overview_level(src, window)
+            logger.info(f"Using overview level: {overview_level}")
+
             # Process the statistics list
             processed_stats = self._process_stats_list(stats)
 
             # Read the data for each band
             results = {}
             for band_idx in self.bands:
-                # Read the data for the specific region
-                band_data = src.read(
-                    band_idx, window=src.window(minx, miny, maxx, maxy)
-                ).astype(np.float32)
+                # Read the data for the specific region, using overview if available
+                if overview_level > 0:
+                    # Get the overview factor
+                    overview_factor = src.overviews(band_idx)[overview_level - 1]
+                    # Calculate the output shape for the overview
+                    out_shape = (
+                        math.ceil(window.height / overview_factor),
+                        math.ceil(window.width / overview_factor),
+                    )
+                    logger.info(
+                        f"Reading band {band_idx} with overview shape: {out_shape}"
+                    )
+                    band_data = src.read(
+                        band_idx,
+                        window=window,
+                        out_shape=out_shape,
+                    ).astype(np.float32)
+                else:
+                    logger.info(f"Reading band {band_idx} at full resolution")
+                    band_data = src.read(
+                        band_idx,
+                        window=window,
+                    ).astype(np.float32)
 
                 logger.info(
                     f"Band {band_idx} data shape: {band_data.shape}, "
@@ -115,7 +194,7 @@ class ZonalStatsService:
                 stats_dict = zonal_stats(
                     shapely_geom,
                     band_data,
-                    affine=src.window_transform(src.window(minx, miny, maxx, maxy)),
+                    affine=src.window_transform(window),
                     stats=processed_stats,
                     nodata=np.nan,
                     all_touched=True,
