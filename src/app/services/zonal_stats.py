@@ -4,12 +4,13 @@ import math
 import numpy as np
 import rasterio
 import requests
-from pyproj import CRS
+from pyproj import CRS, Transformer
 from rasterio.warp import transform_geom
 from rasterstats import zonal_stats
-from shapely.geometry import MultiPolygon, Polygon, shape
+from shapely.geometry import MultiPolygon, Point, Polygon, shape
+from shapely.ops import transform
 
-from ..models.schemas import BandStats, StatType
+from ..models.schemas import BandStats, PointGeometry, PolygonGeometry, StatType
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,6 +19,49 @@ logger = logging.getLogger(__name__)
 MAX_AREA_KM2 = 1000000  # 1 million square kilometers
 # Maximum allowed number of pixels
 MAX_PIXELS = 100000000  # 100 million pixels
+
+
+def create_buffer_polygon(point: PointGeometry) -> dict:
+    """
+    Create a polygon from a point by applying a buffer in meters.
+    Returns a GeoJSON polygon.
+    """
+    # Create a Point geometry
+    point_geom = Point(point.coordinates)
+
+    # Create a transformer from WGS84 to a projected CRS (using UTM)
+    # We'll use UTM zone based on the longitude and hemisphere based on latitude
+    lon = point.coordinates[0]
+    lat = point.coordinates[1]
+
+    # Calculate UTM zone
+    utm_zone = int((lon + 180) / 6) + 1
+
+    # Determine if we're in the northern or southern hemisphere
+    # UTM North is EPSG:32600 + zone, UTM South is EPSG:32700 + zone
+    utm_epsg = 32600 + utm_zone if lat >= 0 else 32700 + utm_zone
+    utm_crs = CRS.from_epsg(utm_epsg)
+
+    logger.info(
+        f"Using UTM zone {utm_zone} {'North' if lat >= 0 else 'South'} "
+        f"(EPSG:{utm_epsg}) for point at {lon}, {lat}"
+    )
+
+    # Create transformers
+    wgs84_to_utm = Transformer.from_crs("EPSG:4326", utm_crs, always_xy=True)
+    utm_to_wgs84 = Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
+
+    # Transform point to UTM
+    utm_point = transform(wgs84_to_utm.transform, point_geom)
+
+    # Create buffer in UTM coordinates (meters)
+    buffered = utm_point.buffer(point.buffer_size)
+
+    # Transform back to WGS84
+    wgs84_polygon = transform(utm_to_wgs84.transform, buffered)
+
+    # Convert to GeoJSON
+    return {"type": "Polygon", "coordinates": [list(wgs84_polygon.exterior.coords)]}
 
 
 def get_stac_asset_url(stac_url: str, asset_key: str | None = None) -> str:
@@ -136,10 +180,16 @@ class ZonalStatsService:
         return len(overviews) - 1
 
     def calculate_stats(
-        self, geometry: dict, stats: list[StatType]
+        self, geometry: PointGeometry | PolygonGeometry, stats: list[StatType]
     ) -> dict[str, BandStats]:
         """Calculate zonal statistics for the given geometry and bands."""
-        shapely_geom = shape(geometry)
+        # Convert point to polygon if needed
+        if isinstance(geometry, PointGeometry):
+            geometry_dict = create_buffer_polygon(geometry)
+        else:
+            geometry_dict = geometry.model_dump()
+
+        shapely_geom = shape(geometry_dict)
         logger.info(f"Processing geometry: {shapely_geom.bounds}")
 
         # Only validate area if not using approximate stats
@@ -154,18 +204,15 @@ class ZonalStatsService:
                 raise ValueError("Source raster has no CRS defined")
 
             # Transform geometry to match raster CRS if needed
-            if geometry.get("crs", {}).get("properties", {}).get("name") != str(
+            # We assume input is in WGS84 (EPSG:4326)
+            if geometry_dict.get("crs", {}).get("properties", {}).get("name") != str(
                 src_crs
             ):
-                logger.info(
-                    f"Transforming geometry from "
-                    f"{geometry.get('crs', {}).get('properties', {}).get('name')} "
-                    f"to {src_crs}"
-                )
+                logger.info(f"Transforming geometry from WGS84 to {src_crs}")
                 transformed_geom = transform_geom(
                     src_crs=CRS.from_epsg(4326),  # Assume input is in WGS84
                     dst_crs=src_crs,
-                    geom=geometry,
+                    geom=geometry_dict,
                 )
                 shapely_geom = shape(transformed_geom)
 
@@ -263,10 +310,14 @@ class ZonalStatsService:
             return results
 
     @staticmethod
-    def validate_geometry(geometry: dict) -> bool:
-        """Validate that the geometry is a valid GeoJSON Polygon or MultiPolygon."""
+    def validate_geometry(geometry: PointGeometry | PolygonGeometry) -> bool:
+        """Validate that the geometry is a valid GeoJSON Point or Polygon."""
         try:
-            shapely_geom = shape(geometry)
-            return isinstance(shapely_geom, Polygon | MultiPolygon)
+            if isinstance(geometry, PointGeometry):
+                # Point validation is handled by the Pydantic model
+                return True
+            else:
+                shapely_geom = shape(geometry.model_dump())
+                return isinstance(shapely_geom, Polygon | MultiPolygon)
         except Exception:
             return False

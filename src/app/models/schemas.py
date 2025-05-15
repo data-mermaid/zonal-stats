@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, validator
 
@@ -26,6 +25,33 @@ class StatType(str, Enum):
     FREQ_HIST = "freq_hist"
 
 
+class PointGeometry(BaseModel):
+    type: str = "Point"
+    coordinates: list[float]  # [longitude, latitude]
+    buffer_size: float  # buffer size in meters
+
+    @validator("coordinates")
+    def validate_coordinates(cls, v):
+        if len(v) != 2:
+            raise ValueError("Point coordinates must be [longitude, latitude]")
+        if not -180 <= v[0] <= 180:
+            raise ValueError("Longitude must be between -180 and 180")
+        if not -90 <= v[1] <= 90:
+            raise ValueError("Latitude must be between -90 and 90")
+        return v
+
+    @validator("buffer_size")
+    def validate_buffer_size(cls, v):
+        if v <= 0:
+            raise ValueError("Buffer size must be greater than 0")
+        return v
+
+
+class PolygonGeometry(BaseModel):
+    type: str = "Polygon"
+    coordinates: list[list[list[float]]]  # [[[x1, y1], [x2, y2], ...]]
+
+
 class ImageConfig(BaseModel):
     url: str
     bands: list[int] = Field(default=[1])
@@ -42,7 +68,7 @@ class StacConfig(BaseModel):
 class ZonalStatsRequest(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    aoi: dict[str, Any]  # GeoJSON geometry
+    aoi: PointGeometry | PolygonGeometry  # Can be either Point or Polygon
     stats: list[StatType] | None = None
     image: ImageConfig | None = None
     stac: StacConfig | None = None
