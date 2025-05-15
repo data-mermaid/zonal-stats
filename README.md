@@ -13,6 +13,7 @@ A FastAPI application that calculates zonal statistics from raster data using Ge
 - Input validation using Pydantic models
 - Docker containerization for easy deployment
 - AWS Lambda compatible
+- Support for both polygon and point geometries (with buffer)
 
 ## API Endpoints
 
@@ -22,7 +23,9 @@ Calculate zonal statistics for a given area of interest and raster data.
 
 #### Request Body
 
-You can provide either an image URL or a STAC item URL, but not both:
+You can provide either an image URL or a STAC item URL, but not both. The area of interest (aoi) can be either a polygon or a point with buffer:
+
+Using a polygon:
 
 ```json
 {
@@ -39,13 +42,14 @@ You can provide either an image URL or a STAC item URL, but not both:
 }
 ```
 
-Or using a STAC item:
+Or using a point with buffer:
 
 ```json
 {
   "aoi": {
-    "type": "Polygon",
-    "coordinates": [[[x1, y1], [x2, y2], ...]]
+    "type": "Point",
+    "coordinates": [longitude, latitude],
+    "buffer_size": 1000  // buffer size in meters
   },
   "stats": ["min", "max", "mean", "count"],
   "stac": {
