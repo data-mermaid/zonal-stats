@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
 
 
 class StatType(str, Enum):
@@ -30,7 +30,8 @@ class PointGeometry(BaseModel):
     coordinates: list[float]  # [longitude, latitude]
     buffer_size: float  # buffer size in meters
 
-    @validator("coordinates")
+    @field_validator("coordinates")
+    @classmethod
     def validate_coordinates(cls, v):
         if len(v) != 2:
             raise ValueError("Point coordinates must be [longitude, latitude]")
@@ -40,7 +41,8 @@ class PointGeometry(BaseModel):
             raise ValueError("Latitude must be between -90 and 90")
         return v
 
-    @validator("buffer_size")
+    @field_validator("buffer_size")
+    @classmethod
     def validate_buffer_size(cls, v):
         if v <= 0:
             raise ValueError("Buffer size must be greater than 0")
@@ -73,15 +75,18 @@ class ZonalStatsRequest(BaseModel):
     image: ImageConfig | None = None
     stac: StacConfig | None = None
 
-    @validator("stats")
+    @field_validator("stats")
+    @classmethod
     def set_default_stats(cls, v):
         if v is None:
             # Default to the basic statistics
             return [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
         return v
 
-    @validator("image", "stac")
-    def validate_source(cls, v, values):
+    @field_validator("image", "stac")
+    @classmethod
+    def validate_source(cls, v, info):
+        values = info.data
         if (
             "image" in values
             and "stac" in values
