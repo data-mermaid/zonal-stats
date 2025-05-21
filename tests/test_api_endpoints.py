@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.schemas import StatType
+from app.services.zonal_stats import ZonalStatsError, GeometryError, RasterError
 
 client = TestClient(app)
 
@@ -46,7 +47,7 @@ def test_zonal_stats_with_image():
     request_data = {
         "aoi": POLYGON_GEOMETRY,
         "stats": [StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
-        "image": {"url": RASTER_PATH, "bands": [1], "approx_stats": False},
+        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1], "approx_stats": False},
     }
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
@@ -66,7 +67,7 @@ def test_zonal_stats_with_point():
     request_data = {
         "aoi": POINT_GEOMETRY,
         "stats": [StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
-        "image": {"url": RASTER_PATH, "bands": [1], "approx_stats": False},
+        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1], "approx_stats": False},
     }
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
@@ -90,10 +91,7 @@ def test_invalid_geometry():
                 [-0.11, 51.52],
                 [-0.16, 51.52],
                 [-0.16, 51.5],
-                [
-                    -0.11,
-                    51.5,
-                ],  # Duplicate point that makes the polygon self-intersecting
+                [-0.11, 51.5],  # Duplicate point that makes the polygon self-intersecting
             ]
         ],
     }
@@ -101,12 +99,13 @@ def test_invalid_geometry():
     request_data = {
         "aoi": invalid_geometry,
         "stats": [StatType.COUNT],
-        "image": {"url": RASTER_PATH, "bands": [1]},
+        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1]},
     }
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
-    assert response.status_code == 400
-    assert "Invalid geometry provided" in response.json()["detail"]
+    assert response.status_code == 422
+    error_detail = response.json()["detail"][2]['msg']
+    assert "Polygon must be closed" in error_detail
 
 
 def test_missing_source():
@@ -114,11 +113,9 @@ def test_missing_source():
     request_data = {"aoi": POLYGON_GEOMETRY, "stats": [StatType.COUNT]}
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
-    assert response.status_code == 400
-    assert (
-        "Exactly one of image or stac configuration must be provided"
-        in response.json()["detail"]
-    )
+    assert response.status_code == 422  # Pydantic validation error
+    error_detail = response.json()["detail"]
+    assert any("Must specify either image or stac source" in str(err) for err in error_detail)
 
 
 def test_both_sources_provided():
@@ -126,16 +123,14 @@ def test_both_sources_provided():
     request_data = {
         "aoi": POLYGON_GEOMETRY,
         "stats": [StatType.COUNT],
-        "image": {"url": RASTER_PATH, "bands": [1]},
+        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1]},
         "stac": {"url": "https://example.com/stac", "asset": "test", "bands": [1]},
     }
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
-    assert response.status_code == 400
-    assert (
-        "Exactly one of image or stac configuration must be provided"
-        in response.json()["detail"]
-    )
+    assert response.status_code == 422  # Pydantic validation error
+    error_detail = response.json()["detail"]
+    assert any("Cannot specify both image and stac sources" in str(err) for err in error_detail)
 
 
 def test_all_stat_types():
@@ -151,7 +146,7 @@ def test_all_stat_types():
             StatType.STD,
             StatType.MEDIAN,
         ],
-        "image": {"url": RASTER_PATH, "bands": [1], "approx_stats": False},
+        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1], "approx_stats": False},
     }
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
@@ -171,9 +166,77 @@ def test_invalid_raster_url():
     request_data = {
         "aoi": POLYGON_GEOMETRY,
         "stats": [StatType.COUNT],
-        "image": {"url": "invalid/path/to/raster.tif", "bands": [1]},
+        "image": {"url": "file://invalid/path/to/raster.tif", "bands": [1]},
     }
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
-    assert response.status_code == 500
-    assert "Error calculating zonal statistics" in response.json()["detail"]
+    assert response.status_code == 400
+    assert "Error opening raster file" in response.json()["detail"]
+
+
+def test_invalid_url_format():
+    """Test error handling for invalid URL format."""
+    request_data = {
+        "aoi": POLYGON_GEOMETRY,
+        "stats": [StatType.COUNT],
+        "image": {"url": "not-a-url", "bands": [1]},
+    }
+
+    response = client.post("/api/v1/zonal-stats", json=request_data)
+    assert response.status_code == 422  # Pydantic validation error
+    error_detail = response.json()["detail"]
+    assert any("URL must start with" in str(err) for err in error_detail)
+
+
+def test_empty_stats_list():
+    """Test error handling for empty statistics list."""
+    request_data = {
+        "aoi": POLYGON_GEOMETRY,
+        "stats": [],
+        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1]},
+    }
+
+    response = client.post("/api/v1/zonal-stats", json=request_data)
+    assert response.status_code == 422  # Pydantic validation error
+    error_detail = response.json()["detail"]
+    assert any("Statistics list cannot be empty" in str(err) for err in error_detail)
+
+
+def test_invalid_point_coordinates():
+    """Test error handling for invalid point coordinates."""
+    invalid_point = {
+        "type": "Point",
+        "coordinates": [200, 100],  # Invalid coordinates
+        "buffer_size": 1000,
+    }
+
+    request_data = {
+        "aoi": invalid_point,
+        "stats": [StatType.COUNT],
+        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1]},
+    }
+
+    response = client.post("/api/v1/zonal-stats", json=request_data)
+    assert response.status_code == 422  # Pydantic validation error
+    error_detail = response.json()["detail"]
+    assert any("Longitude must be between -180 and 180" in str(err) for err in error_detail)
+
+
+def test_invalid_buffer_size():
+    """Test error handling for invalid buffer size."""
+    invalid_point = {
+        "type": "Point",
+        "coordinates": [-0.135, 51.51],
+        "buffer_size": -1000,  # Invalid buffer size
+    }
+
+    request_data = {
+        "aoi": invalid_point,
+        "stats": [StatType.COUNT],
+        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1]},
+    }
+
+    response = client.post("/api/v1/zonal-stats", json=request_data)
+    assert response.status_code == 422  # Pydantic validation error
+    error_detail = response.json()["detail"]
+    assert any("Buffer size must be greater than 0" in str(err) for err in error_detail)
