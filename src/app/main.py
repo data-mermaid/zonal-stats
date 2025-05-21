@@ -1,8 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from mangum import Mangum
+from pydantic import ValidationError
 
 from .api.endpoints import router
+from .services.zonal_stats import ZonalStatsError, GeometryError, RasterError, STACError
 
 app = FastAPI(
     title="Zonal Statistics API",
@@ -30,6 +33,33 @@ async def root():
         "docs_url": "/docs",
         "redoc_url": "/redoc",
     }
+
+
+@app.exception_handler(ZonalStatsError)
+async def zonal_stats_exception_handler(request: Request, exc: ZonalStatsError):
+    """Handle custom ZonalStatsError exceptions."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.message},
+    )
+
+
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request: Request, exc: ValidationError):
+    """Handle Pydantic validation errors."""
+    return JSONResponse(
+        status_code=400,
+        content={"detail": exc.errors()},
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle unexpected exceptions."""
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An unexpected error occurred. Please try again later."},
+    )
 
 
 # Create handler for AWS Lambda
