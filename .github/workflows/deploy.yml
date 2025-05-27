@@ -55,10 +55,10 @@ jobs:
         if: github.event_name == 'push'
         run: |
           cd infrastructure
-          cdk deploy --require-approval never
+          cdk deploy --require-approval never --context deploy_layer=false
 
       - name: CDK Diff
         if: github.event_name == 'pull_request'
         run: |
           cd infrastructure
-          cdk diff
+          cdk diff --context deploy_layer=false
