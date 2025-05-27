@@ -64,6 +64,12 @@ class InfrastructureStack(Stack):
             "ZonalStatsApi",
             rest_api_name="Zonal Statistics API",
             description="API for calculating zonal statistics from raster data",
+            default_cors_preflight_options=apigw.CorsOptions(
+                allow_origins=apigw.Cors.ALL_ORIGINS,
+                allow_methods=apigw.Cors.ALL_METHODS,
+                allow_headers=apigw.Cors.DEFAULT_HEADERS,
+                max_age=Duration.days(1),
+            ),
             deploy_options=apigw.StageOptions(
                 stage_name="v1",
                 logging_level=apigw.MethodLoggingLevel.INFO,
@@ -103,13 +109,22 @@ class InfrastructureStack(Stack):
         # Create API Gateway integration with Lambda
         integration = apigw.LambdaIntegration(
             lambda_function,
-            request_templates={"application/json": '{ "statusCode": "200" }'},
+            proxy=True,  # Enable proxy integration
+            content_handling=apigw.ContentHandling.CONVERT_TO_TEXT,
         )
 
         # Add proxy resource to handle all paths
-        api.root.add_proxy(
+        proxy = api.root.add_proxy(
             default_integration=integration,
             any_method=True,
+        )
+
+        # Enable CORS for the proxy resource
+        proxy.add_cors_preflight(
+            allow_origins=apigw.Cors.ALL_ORIGINS,
+            allow_methods=apigw.Cors.ALL_METHODS,
+            allow_headers=apigw.Cors.DEFAULT_HEADERS,
+            max_age=Duration.days(1),
         )
 
         # Output the API endpoint
