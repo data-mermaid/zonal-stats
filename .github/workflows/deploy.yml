@@ -47,11 +47,9 @@ jobs:
 
       - name: Create Lambda Layer
         run: |
-          cd infrastructure
-          mkdir -p lambda_layer
-          cd lambda_layer
+          cd infrastructure/lambda_layer
           mkdir -p python
-          pip install -r ../../lambda_layer/requirements.txt -t python/
+          pip install -r requirements.txt -t python/
           zip -r lambda_layer.zip python/
           ls -la  # Debug: List files to verify zip was created
 
