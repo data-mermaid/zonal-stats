@@ -34,16 +34,14 @@ class InfrastructureStack(Stack):
             ],
         )
 
-        # Create Lambda layer only if deploy_layer context is True
-        lambda_layer = None
-        if self.node.try_get_context("deploy_layer"):
-            lambda_layer = _lambda.LayerVersion(
-                self,
-                "ZonalStatsLayer",
-                code=_lambda.Code.from_asset("lambda_layer/lambda_layer.zip"),
-                compatible_runtimes=[_lambda.Runtime.PYTHON_3_11],
-                description="Layer containing all dependencies for zonal statistics API",
-            )
+        # Create Lambda layer for all dependencies
+        lambda_layer = _lambda.LayerVersion(
+            self,
+            "ZonalStatsLayer",
+            code=_lambda.Code.from_asset("lambda_layer/lambda_layer.zip"),
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_11],
+            description="Layer containing all dependencies for zonal statistics API",
+        )
 
         # Create Lambda function
         lambda_function = _lambda.Function(
@@ -57,7 +55,7 @@ class InfrastructureStack(Stack):
             },
             timeout=Duration.seconds(300),
             memory_size=10240,
-            layers=[lambda_layer] if lambda_layer else [],
+            layers=[lambda_layer],
         )
 
         # Create API Gateway

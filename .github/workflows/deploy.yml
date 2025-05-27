@@ -45,6 +45,16 @@ jobs:
           pip install -r requirements.txt
           npm install -g aws-cdk
 
+      - name: Create Lambda Layer
+        run: |
+          cd infrastructure
+          mkdir -p lambda_layer
+          cd lambda_layer
+          mkdir -p python
+          pip install -r ../../lambda_layer/requirements.txt -t python/
+          zip -r lambda_layer.zip python/
+          ls -la  # Debug: List files to verify zip was created
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -55,10 +65,10 @@ jobs:
         if: github.event_name == 'push'
         run: |
           cd infrastructure
-          cdk deploy --require-approval never --context deploy_layer=false
+          cdk deploy --require-approval never
 
       - name: CDK Diff
         if: github.event_name == 'pull_request'
         run: |
           cd infrastructure
-          cdk diff --context deploy_layer=false
+          cdk diff
