@@ -134,19 +134,24 @@ class ZonalStatsService:
         self.bands = bands
         self.approx_stats = approx_stats
 
-    def _process_stats_list(self, stats: list[StatType]) -> list[str]:
+    def _process_stats_list(self, stats: list[StatType] | None) -> list[str]:
         """Process the list of statistics."""
-        if not stats:
-            raise ZonalStatsError("No statistics specified")
-        return [stat.value for stat in stats]
+        if stats is None:
+            # Use default statistics
+            stats = [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
+        elif not stats:
+            raise ZonalStatsError("Statistics list cannot be empty")
+        
+        # Filter out custom statistics that aren't supported by rasterstats
+        raster_stats = [stat.value for stat in stats if stat not in [StatType.AREA, StatType.FREQ_HIST]]
+        return raster_stats
 
     def _validate_area(self, shapely_geom: Polygon | MultiPolygon) -> None:
         """Validate that the area is within acceptable limits."""
         try:
-            # Calculate area in square kilometers
-            area_km2 = (
-                shapely_geom.area / 1000000
-            )  # Convert from square meters to square kilometers
+            # Calculate area in square kilometers using the proper CRS-aware method
+            area_m2 = self._calculate_area_in_square_meters(shapely_geom, CRS.from_epsg(4326))  # Assume WGS84 if not specified
+            area_km2 = area_m2 / 1000000  # Convert from square meters to square kilometers
             logger.info(f"Area of geometry: {area_km2:.2f} km²")
 
             if area_km2 > MAX_AREA_KM2:
@@ -254,8 +259,9 @@ class ZonalStatsService:
 
     def _transform_geometry_to_raster_crs(
         self, geometry_dict: dict, src_crs: CRS
-    ) -> shape:
-        """Transform geometry to match raster CRS if needed."""
+    ) -> tuple[shape, CRS]:
+        """Transform geometry to match raster CRS if needed.
+        Returns the transformed geometry and its CRS."""
         try:
             if geometry_dict.get("crs", {}).get("properties", {}).get("name") != str(
                 src_crs
@@ -266,12 +272,39 @@ class ZonalStatsService:
                     dst_crs=src_crs,
                     geom=geometry_dict,
                 )
-                return shape(transformed_geom)
-            return shape(geometry_dict)
+                return shape(transformed_geom), src_crs
+            return shape(geometry_dict), CRS.from_epsg(4326)
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
             raise GeometryError(f"Error transforming geometry: {str(e)}")
+
+    def _calculate_area_in_square_meters(self, geom: shape, geom_crs: CRS) -> float:
+        """Calculate area in square meters, converting from the geometry's CRS if needed."""
+        try:
+            # If the geometry is already in a projected CRS that uses meters
+            if geom_crs.is_projected and geom_crs.axis_info[0].unit_name.lower() in ['metre', 'meter']:
+                return geom.area
+            
+            # If the geometry is in a geographic CRS (like WGS84) or uses different units,
+            # transform it to an equal-area projection centered on the geometry
+            center = geom.centroid
+            # Use Albers Equal Area projection centered on the geometry
+            proj_crs = CRS.from_proj4(
+                f"+proj=aea +lat_1={center.y-1} +lat_2={center.y+1} "
+                f"+lat_0={center.y} +lon_0={center.x} +x_0=0 +y_0=0 "
+                f"+ellps=WGS84 +units=m +no_defs"
+            )
+            
+            # Transform the geometry to the equal-area projection
+            transformer = Transformer.from_crs(geom_crs, proj_crs, always_xy=True)
+            transformed_geom = transform(transformer.transform, geom)
+            
+            return transformed_geom.area
+        except Exception as e:
+            if isinstance(e, ZonalStatsError):
+                raise
+            raise GeometryError(f"Error calculating area: {str(e)}")
 
     def _read_band_data(
         self,
@@ -350,17 +383,22 @@ class ZonalStatsService:
         try:
             band_stats_dict = {}
             for stat in stats:
-                value = stats_dict.get(stat.value)
-                if value is not None:
-                    if stat == StatType.COUNT or stat == StatType.NODATA:
-                        value = int(value)
-                    elif stat == StatType.UNIQUE:
-                        value = list(map(float, value))
-                    elif stat == StatType.FREQ_HIST:
-                        value = dict(value)
-                    else:
-                        value = float(value)
-                    band_stats_dict[stat.value] = value
+                if stat == StatType.AREA:
+                    # Area is calculated in square meters
+                    band_stats_dict[stat.value] = float(stats_dict.get('area', 0))
+                elif stat == StatType.FREQ_HIST:
+                    # Frequency histogram is already calculated
+                    band_stats_dict[stat.value] = dict(stats_dict.get('freq_hist', {}))
+                elif stat == StatType.COUNT or stat == StatType.NODATA:
+                    value = stats_dict.get(stat.value)
+                    band_stats_dict[stat.value] = int(value) if value is not None else 0
+                elif stat == StatType.UNIQUE:
+                    # Handle unique values - they should already be a list of numbers
+                    value = stats_dict.get(stat.value)
+                    band_stats_dict[stat.value] = value if value is not None else []
+                else:
+                    value = stats_dict.get(stat.value)
+                    band_stats_dict[stat.value] = float(value) if value is not None else None
             return BandStats(**band_stats_dict)
         except Exception as e:
             if isinstance(e, ZonalStatsError):
@@ -368,7 +406,7 @@ class ZonalStatsService:
             raise ZonalStatsError(f"Error processing band statistics: {str(e)}")
 
     def calculate_stats(
-        self, geometry: PointGeometry | PolygonGeometry, stats: list[StatType]
+        self, geometry: PointGeometry | PolygonGeometry, stats: list[StatType] | None
     ) -> dict[str, BandStats]:
         """Calculate zonal statistics for the given geometry and bands."""
         try:
@@ -392,7 +430,7 @@ class ZonalStatsService:
                     raise RasterError("Source raster has no CRS defined")
 
                 # Transform geometry to match raster CRS if needed
-                shapely_geom = self._transform_geometry_to_raster_crs(
+                shapely_geom, geom_crs = self._transform_geometry_to_raster_crs(
                     geometry_dict, src_crs
                 )
 
@@ -429,6 +467,8 @@ class ZonalStatsService:
 
                 # Process the statistics list
                 processed_stats = self._process_stats_list(stats)
+                # Get the actual stats to use for processing results
+                stats_to_use = stats if stats is not None else [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
 
                 # Process each band
                 results = {}
@@ -436,24 +476,40 @@ class ZonalStatsService:
                     # Read band data
                     band_data = self._read_band_data(src, band_idx, window, overview_level)
 
+                    # Calculate frequency histogram if requested
+                    freq_hist = {}
+                    if StatType.FREQ_HIST in stats_to_use:
+                        # Calculate histogram before handling nodata
+                        unique_values, counts = np.unique(band_data, return_counts=True)
+                        freq_hist = dict(zip(unique_values.tolist(), counts.tolist()))
+
                     # Handle nodata values
                     band_data = self._handle_nodata(band_data, src)
 
-                    # Calculate statistics
-                    stats_dict = zonal_stats(
-                        shapely_geom,
-                        band_data,
-                        affine=src.window_transform(window),
-                        stats=processed_stats,
-                        nodata=np.nan,
-                        all_touched=True,
-                        raster_out=False,
-                    )[0]
+                    # Initialize stats dictionary with custom statistics
+                    stats_dict = {}
+                    if StatType.AREA in stats_to_use:
+                        stats_dict['area'] = self._calculate_area_in_square_meters(shapely_geom, geom_crs)
+                    if StatType.FREQ_HIST in stats_to_use:
+                        stats_dict['freq_hist'] = freq_hist
+
+                    # Calculate rasterstats if there are any standard statistics requested
+                    if processed_stats:
+                        raster_stats_dict = zonal_stats(
+                            shapely_geom,
+                            band_data,
+                            affine=src.window_transform(window),
+                            stats=processed_stats,
+                            nodata=np.nan,
+                            all_touched=True,
+                            raster_out=False,
+                        )[0]
+                        stats_dict.update(raster_stats_dict)
 
                     logger.info(f"Calculated stats for band {band_idx}: {stats_dict}")
 
                     # Process and store results
-                    band_stats = self._process_band_stats(stats_dict, stats)
+                    band_stats = self._process_band_stats(stats_dict, stats_to_use)
                     results[f"band_{band_idx}"] = band_stats
 
                 return results
