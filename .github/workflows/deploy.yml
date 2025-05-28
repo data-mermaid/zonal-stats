@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'infrastructure/**'
+      - 'src/**'
       - '.github/workflows/deploy.yml'
     branches:
       - main
