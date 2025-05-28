@@ -337,6 +337,9 @@ class ZonalStatsService:
                     window=window,
                 ).astype(np.float32)
 
+            # Handle nodata values
+            band_data = self._handle_nodata(band_data, src)
+
             # Apply scale and offset if they exist
             scales = src.scales
             offsets = src.offsets
@@ -482,9 +485,6 @@ class ZonalStatsService:
                         # Calculate histogram before handling nodata
                         unique_values, counts = np.unique(band_data, return_counts=True)
                         freq_hist = dict(zip(unique_values.tolist(), counts.tolist()))
-
-                    # Handle nodata values
-                    band_data = self._handle_nodata(band_data, src)
 
                     # Initialize stats dictionary with custom statistics
                     stats_dict = {}
