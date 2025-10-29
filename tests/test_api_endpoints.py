@@ -107,7 +107,7 @@ def test_invalid_geometry():
     error_details = response.json().get("detail") or []
     passes = False
     for error_detail in error_details:
-        error_detail = error_detail.get("msg")
+        error_detail = error_detail.get("msg") or ""
         if "Polygon must be closed" in error_detail:
             passes = True
             break

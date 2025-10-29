@@ -49,7 +49,7 @@ Or using a point with buffer:
   "aoi": {
     "type": "Point",
     "coordinates": [longitude, latitude],
-    "buffer_size": 1000  // buffer size in meters
+    "buffer_size": 1000  // buffer size in meters defaults to 0.001
   },
   "stats": ["min", "max", "mean", "count"],
   "stac": {
