@@ -104,8 +104,15 @@ def test_invalid_geometry():
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
     assert response.status_code == 422
-    error_detail = response.json()["detail"][2]['msg']
-    assert "Polygon must be closed" in error_detail
+    error_details = response.json().get("detail") or []
+    passes = False
+    for error_detail in error_details:
+        error_detail = error_detail.get("msg")
+        if "Polygon must be closed" in error_detail:
+            passes = True
+            break
+    
+    assert passes, "Expected geometry validation error not found"
 
 
 def test_missing_source():
