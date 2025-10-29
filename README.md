@@ -49,7 +49,7 @@ Or using a point with buffer:
   "aoi": {
     "type": "Point",
     "coordinates": [longitude, latitude],
-    "buffer_size": 1000  // buffer size in meters
+    "buffer_size": 1000  // buffer size in meters defaults to 0.001
   },
   "stats": ["min", "max", "mean", "count"],
   "stac": {
@@ -115,24 +115,17 @@ The API will:
 
 ### Local Development
 
-1. Create a virtual environment:
+1. Install dependencies 
 
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
-   ```
+```bash
+  uv sync
+```
 
-2. Install dependencies:
+2. Run development server:
 
-   ```bash
-   pip install -e .
-   ```
-
-3. Run the development server:
-
-   ```bash
-   uvicorn app.main:app --reload
-   ```
+```bash
+  uv run uvicorn app.main:app --reload --host 0.0.0.0
+```
 
 ### Docker Deployment
 

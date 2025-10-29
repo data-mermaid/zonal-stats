@@ -28,7 +28,7 @@ class StatType(str, Enum):
 class PointGeometry(BaseModel):
     type: str = "Point"
     coordinates: list[float] = Field(description="[longitude, latitude]")
-    buffer_size: float = Field(description="buffer size in meters")
+    buffer_size: float = Field(default=0.001, description="buffer size in meters")
 
     @field_validator("coordinates")
     @classmethod
