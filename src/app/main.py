@@ -1,20 +1,20 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_redoc_html
+from fastapi.responses import HTMLResponse, JSONResponse
 from mangum import Mangum
 from pydantic import ValidationError
 
 from .api.endpoints import router
-from .services.zonal_stats import ZonalStatsError, GeometryError, RasterError, STACError
+from .services.zonal_stats import ZonalStatsError
 
 app = FastAPI(
     title="Zonal Statistics API",
     description="API for calculating zonal statistics from raster data",
     version="0.1.0",
     docs_url="/docs",
-    redoc_url="/redoc",
+    redoc_url=None,  # Disable default ReDoc to use custom version
     openapi_url="/openapi.json",
-    root_path="/v1"
 )
 
 # Add CORS middleware
@@ -38,6 +38,16 @@ async def root():
         "docs_url": "/docs",
         "redoc_url": "/redoc",
     }
+
+
+@app.get("/redoc", response_class=HTMLResponse, include_in_schema=False)
+async def redoc_html():
+    """Custom ReDoc endpoint with stable CDN URL."""
+    return get_redoc_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - ReDoc",
+        redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2.1.3/bundles/redoc.standalone.js",
+    )
 
 
 @app.exception_handler(ZonalStatsError)

@@ -20,24 +20,33 @@ MAX_AREA_KM2 = 1000000  # 1 million square kilometers
 # Maximum allowed number of pixels
 MAX_PIXELS = 100000000  # 100 million pixels
 
+
 class ZonalStatsError(Exception):
     """Base exception for zonal statistics errors."""
+
     def __init__(self, message: str, status_code: int = 400):
         self.message = message
         self.status_code = status_code
         super().__init__(self.message)
 
+
 class GeometryError(ZonalStatsError):
     """Exception for geometry-related errors."""
+
     pass
+
 
 class RasterError(ZonalStatsError):
     """Exception for raster-related errors."""
+
     pass
+
 
 class STACError(ZonalStatsError):
     """Exception for STAC-related errors."""
+
     pass
+
 
 def create_buffer_polygon(point: PointGeometry) -> dict:
     """
@@ -54,7 +63,10 @@ def create_buffer_polygon(point: PointGeometry) -> dict:
         lat = point.coordinates[1]
 
         if not (-180 <= lon <= 180) or not (-90 <= lat <= 90):
-            raise GeometryError("Invalid coordinates: longitude must be between -180 and 180, latitude between -90 and 90")
+            raise GeometryError(
+                "Invalid coordinates: longitude must be between -180 and 180, "
+                "latitude between -90 and 90"
+            )
 
         # Calculate UTM zone
         utm_zone = int((lon + 180) / 6) + 1
@@ -79,7 +91,7 @@ def create_buffer_polygon(point: PointGeometry) -> dict:
         # Create buffer in UTM coordinates (meters)
         if point.buffer_size <= 0:
             raise GeometryError("Buffer size must be greater than 0")
-        
+
         buffered = utm_point.buffer(point.buffer_size)
 
         # Transform back to WGS84
@@ -90,7 +102,8 @@ def create_buffer_polygon(point: PointGeometry) -> dict:
     except Exception as e:
         if isinstance(e, ZonalStatsError):
             raise
-        raise GeometryError(f"Error creating buffer polygon: {str(e)}")
+        raise GeometryError(f"Error creating buffer polygon: {str(e)}") from e
+
 
 def get_stac_asset_url(stac_url: str, asset_key: str | None = None) -> str:
     """
@@ -117,16 +130,19 @@ def get_stac_asset_url(stac_url: str, asset_key: str | None = None) -> str:
         logger.info(f"Asset href: {href}")
         if not href:
             if asset_key:
-                raise STACError(f"Asset '{asset_key}' does not contain an 'href' field.")
+                raise STACError(
+                    f"Asset '{asset_key}' does not contain an 'href' field."
+                )
             else:
                 raise STACError("The first asset does not contain an 'href' field.")
         return href
     except requests.RequestException as e:
-        raise STACError(f"Error fetching STAC item: {str(e)}")
+        raise STACError(f"Error fetching STAC item: {str(e)}") from e
     except Exception as e:
         if isinstance(e, ZonalStatsError):
             raise
-        raise STACError(f"Unexpected error processing STAC item: {str(e)}")
+        raise STACError(f"Unexpected error processing STAC item: {str(e)}") from e
+
 
 class ZonalStatsService:
     def __init__(self, url: str, bands: list[int], approx_stats: bool = True):
@@ -141,27 +157,36 @@ class ZonalStatsService:
             stats = [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
         elif not stats:
             raise ZonalStatsError("Statistics list cannot be empty")
-        
+
         # Filter out custom statistics that aren't supported by rasterstats
-        raster_stats = [stat.value for stat in stats if stat not in [StatType.AREA, StatType.FREQ_HIST]]
+        raster_stats = [
+            stat.value
+            for stat in stats
+            if stat not in [StatType.AREA, StatType.FREQ_HIST]
+        ]
         return raster_stats
 
     def _validate_area(self, shapely_geom: Polygon | MultiPolygon) -> None:
         """Validate that the area is within acceptable limits."""
         try:
             # Calculate area in square kilometers using the proper CRS-aware method
-            area_m2 = self._calculate_area_in_square_meters(shapely_geom, CRS.from_epsg(4326))  # Assume WGS84 if not specified
-            area_km2 = area_m2 / 1000000  # Convert from square meters to square kilometers
+            area_m2 = self._calculate_area_in_square_meters(
+                shapely_geom, CRS.from_epsg(4326)
+            )  # Assume WGS84 if not specified
+            area_km2 = (
+                area_m2 / 1000000
+            )  # Convert from square meters to square kilometers
             logger.info(f"Area of geometry: {area_km2:.2f} km²")
 
             if area_km2 > MAX_AREA_KM2:
                 raise GeometryError(
-                    f"Area too large: {area_km2:.2f} km². Maximum allowed area is {MAX_AREA_KM2} km²"
+                    f"Area too large: {area_km2:.2f} km². "
+                    f"Maximum allowed area is {MAX_AREA_KM2} km²"
                 )
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise GeometryError(f"Error validating area: {str(e)}")
+            raise GeometryError(f"Error validating area: {str(e)}") from e
 
     def _validate_pixel_count(self, window: rasterio.windows.Window) -> None:
         """Validate that the number of pixels is within acceptable limits."""
@@ -171,12 +196,13 @@ class ZonalStatsService:
 
             if total_pixels > MAX_PIXELS:
                 raise RasterError(
-                    f"Too many pixels: {total_pixels}. Maximum allowed pixels is {MAX_PIXELS}"
+                    f"Too many pixels: {total_pixels}. "
+                    f"Maximum allowed pixels is {MAX_PIXELS}"
                 )
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise RasterError(f"Error validating pixel count: {str(e)}")
+            raise RasterError(f"Error validating pixel count: {str(e)}") from e
 
     def _get_overview_level(
         self, src: rasterio.io.DatasetReader, window: rasterio.windows.Window
@@ -210,13 +236,15 @@ class ZonalStatsService:
                 # Calculate the effective resolution at this overview level
                 effective_pixels = total_pixels / (factor * factor)
                 logger.info(
-                    f"Overview level {level} (factor: {factor}): {effective_pixels:.0f} effective pixels"
+                    f"Overview level {level} (factor: {factor}): "
+                    f"{effective_pixels:.0f} effective pixels"
                 )
 
                 # Only use this overview if it would result in at least 1 million pixels
                 if effective_pixels < 1_000_000:
                     logger.info(
-                        f"Overview level {level} would result in too few pixels ({effective_pixels:.0f}), using previous level"
+                        f"Overview level {level} would result in too few pixels "
+                        f"({effective_pixels:.0f}), using previous level"
                     )
                     return max(0, level - 1)
 
@@ -233,7 +261,7 @@ class ZonalStatsService:
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise RasterError(f"Error determining overview level: {str(e)}")
+            raise RasterError(f"Error determining overview level: {str(e)}") from e
 
     def _prepare_geometry(
         self, geometry: PointGeometry | PolygonGeometry
@@ -248,14 +276,16 @@ class ZonalStatsService:
 
             shapely_geom = shape(geometry_dict)
             if not shapely_geom.is_valid:
-                raise GeometryError("Invalid geometry: self-intersection or other topological error")
-            
+                raise GeometryError(
+                    "Invalid geometry: self-intersection or other topological error"
+                )
+
             logger.info(f"Processing geometry: {shapely_geom.bounds}")
             return geometry_dict, shapely_geom
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise GeometryError(f"Error preparing geometry: {str(e)}")
+            raise GeometryError(f"Error preparing geometry: {str(e)}") from e
 
     def _transform_geometry_to_raster_crs(
         self, geometry_dict: dict, src_crs: CRS
@@ -277,34 +307,41 @@ class ZonalStatsService:
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise GeometryError(f"Error transforming geometry: {str(e)}")
+            raise GeometryError(f"Error transforming geometry: {str(e)}") from e
 
     def _calculate_area_in_square_meters(self, geom: shape, geom_crs: CRS) -> float:
-        """Calculate area in square meters, converting from the geometry's CRS if needed."""
+        """
+        Calculate area in square meters, converting from the geometry's CRS
+        if needed.
+        """
         try:
             # If the geometry is already in a projected CRS that uses meters
-            if geom_crs.is_projected and geom_crs.axis_info[0].unit_name.lower() in ['metre', 'meter']:
+            if geom_crs.is_projected and geom_crs.axis_info[0].unit_name.lower() in [
+                "metre",
+                "meter",
+            ]:
                 return geom.area
-            
-            # If the geometry is in a geographic CRS (like WGS84) or uses different units,
-            # transform it to an equal-area projection centered on the geometry
+
+            # If the geometry is in a geographic CRS (like WGS84) or uses
+            # different units, transform it to an equal-area projection
+            # centered on the geometry
             center = geom.centroid
             # Use Albers Equal Area projection centered on the geometry
             proj_crs = CRS.from_proj4(
-                f"+proj=aea +lat_1={center.y-1} +lat_2={center.y+1} "
+                f"+proj=aea +lat_1={center.y - 1} +lat_2={center.y + 1} "
                 f"+lat_0={center.y} +lon_0={center.x} +x_0=0 +y_0=0 "
                 f"+ellps=WGS84 +units=m +no_defs"
             )
-            
+
             # Transform the geometry to the equal-area projection
             transformer = Transformer.from_crs(geom_crs, proj_crs, always_xy=True)
             transformed_geom = transform(transformer.transform, geom)
-            
+
             return transformed_geom.area
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise GeometryError(f"Error calculating area: {str(e)}")
+            raise GeometryError(f"Error calculating area: {str(e)}") from e
 
     def _read_band_data(
         self,
@@ -343,13 +380,13 @@ class ZonalStatsService:
             # Apply scale and offset if they exist
             scales = src.scales
             offsets = src.offsets
-            
+
             if scales is not None and len(scales) >= band_idx:
                 scale = scales[band_idx - 1]
                 if scale != 1.0:
                     logger.info(f"Applying scale factor {scale} to band {band_idx}")
                     band_data = band_data * scale
-                    
+
             if offsets is not None and len(offsets) >= band_idx:
                 offset = offsets[band_idx - 1]
                 if offset != 0.0:
@@ -357,13 +394,14 @@ class ZonalStatsService:
                     band_data = band_data + offset
 
             logger.info(
-                f"Band {band_idx} data shape: {band_data.shape}, dtype: {band_data.dtype}"
+                f"Band {band_idx} data shape: {band_data.shape}, "
+                f"dtype: {band_data.dtype}"
             )
             return band_data
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise RasterError(f"Error reading band data: {str(e)}")
+            raise RasterError(f"Error reading band data: {str(e)}") from e
 
     def _handle_nodata(
         self, band_data: np.ndarray, src: rasterio.io.DatasetReader
@@ -373,13 +411,14 @@ class ZonalStatsService:
             if src.nodata is not None:
                 band_data[band_data == src.nodata] = np.nan
                 logger.info(
-                    f"Number of NaN values after nodata conversion: {np.isnan(band_data).sum()}"
+                    f"Number of NaN values after nodata conversion: "
+                    f"{np.isnan(band_data).sum()}"
                 )
             return band_data
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise RasterError(f"Error handling nodata values: {str(e)}")
+            raise RasterError(f"Error handling nodata values: {str(e)}") from e
 
     def _process_band_stats(self, stats_dict: dict, stats: list[StatType]) -> BandStats:
         """Process statistics for a single band and convert to BandStats model."""
@@ -388,10 +427,10 @@ class ZonalStatsService:
             for stat in stats:
                 if stat == StatType.AREA:
                     # Area is calculated in square meters
-                    band_stats_dict[stat.value] = float(stats_dict.get('area', 0))
+                    band_stats_dict[stat.value] = float(stats_dict.get("area", 0))
                 elif stat == StatType.FREQ_HIST:
                     # Frequency histogram is already calculated
-                    band_stats_dict[stat.value] = dict(stats_dict.get('freq_hist', {}))
+                    band_stats_dict[stat.value] = dict(stats_dict.get("freq_hist", {}))
                 elif stat == StatType.COUNT or stat == StatType.NODATA:
                     value = stats_dict.get(stat.value)
                     band_stats_dict[stat.value] = int(value) if value is not None else 0
@@ -401,12 +440,14 @@ class ZonalStatsService:
                     band_stats_dict[stat.value] = value if value is not None else []
                 else:
                     value = stats_dict.get(stat.value)
-                    band_stats_dict[stat.value] = float(value) if value is not None else None
+                    band_stats_dict[stat.value] = (
+                        float(value) if value is not None else None
+                    )
             return BandStats(**band_stats_dict)
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise ZonalStatsError(f"Error processing band statistics: {str(e)}")
+            raise ZonalStatsError(f"Error processing band statistics: {str(e)}") from e
 
     def calculate_stats(
         self, geometry: PointGeometry | PolygonGeometry, stats: list[StatType] | None
@@ -424,7 +465,7 @@ class ZonalStatsService:
             try:
                 src = rasterio.open(self.url)
             except Exception as e:
-                raise RasterError(f"Error opening raster file: {str(e)}")
+                raise RasterError(f"Error opening raster file: {str(e)}") from e
 
             try:
                 # Get the source CRS
@@ -446,19 +487,22 @@ class ZonalStatsService:
                     # Get the center point of the geometry
                     center_x = (minx + maxx) / 2
                     center_y = (miny + maxy) / 2
-                    
+
                     # Create a window that's at least one pixel in size
                     pixel_size_x = src.res[0]
                     pixel_size_y = src.res[1]
-                    
+
                     # Create a window that's at least one pixel in size
                     window = src.window(
-                        center_x - pixel_size_x/2,
-                        center_y - pixel_size_y/2,
-                        center_x + pixel_size_x/2,
-                        center_y + pixel_size_y/2
+                        center_x - pixel_size_x / 2,
+                        center_y - pixel_size_y / 2,
+                        center_x + pixel_size_x / 2,
+                        center_y + pixel_size_y / 2,
                     )
-                    logger.info(f"Adjusted window size for small polygon to ensure at least one pixel: {window}")
+                    logger.info(
+                        f"Adjusted window size for small polygon to ensure at least "
+                        f"one pixel: {window}"
+                    )
 
                 # Only validate pixel count if not using approximate stats
                 if not self.approx_stats:
@@ -471,29 +515,40 @@ class ZonalStatsService:
                 # Process the statistics list
                 processed_stats = self._process_stats_list(stats)
                 # Get the actual stats to use for processing results
-                stats_to_use = stats if stats is not None else [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
+                stats_to_use = (
+                    stats
+                    if stats is not None
+                    else [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
+                )
 
                 # Process each band
                 results = {}
                 for band_idx in self.bands:
                     # Read band data
-                    band_data = self._read_band_data(src, band_idx, window, overview_level)
+                    band_data = self._read_band_data(
+                        src, band_idx, window, overview_level
+                    )
 
                     # Calculate frequency histogram if requested
                     freq_hist = {}
                     if StatType.FREQ_HIST in stats_to_use:
                         # Calculate histogram before handling nodata
                         unique_values, counts = np.unique(band_data, return_counts=True)
-                        freq_hist = dict(zip(unique_values.tolist(), counts.tolist()))
+                        freq_hist = dict(
+                            zip(unique_values.tolist(), counts.tolist(), strict=False)
+                        )
 
                     # Initialize stats dictionary with custom statistics
                     stats_dict = {}
                     if StatType.AREA in stats_to_use:
-                        stats_dict['area'] = self._calculate_area_in_square_meters(shapely_geom, geom_crs)
+                        stats_dict["area"] = self._calculate_area_in_square_meters(
+                            shapely_geom, geom_crs
+                        )
                     if StatType.FREQ_HIST in stats_to_use:
-                        stats_dict['freq_hist'] = freq_hist
+                        stats_dict["freq_hist"] = freq_hist
 
-                    # Calculate rasterstats if there are any standard statistics requested
+                    # Calculate rasterstats if there are any standard statistics
+                    # requested
                     if processed_stats:
                         raster_stats_dict = zonal_stats(
                             shapely_geom,
@@ -518,7 +573,7 @@ class ZonalStatsService:
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise ZonalStatsError(f"Error calculating statistics: {str(e)}")
+            raise ZonalStatsError(f"Error calculating statistics: {str(e)}") from e
 
     @staticmethod
     def validate_geometry(geometry: PointGeometry | PolygonGeometry) -> bool:
@@ -531,7 +586,7 @@ class ZonalStatsService:
                 shapely_geom = shape(geometry.model_dump())
 
                 # Check if it's a valid polygon type
-                if not isinstance(shapely_geom, (Polygon, MultiPolygon)):
+                if not isinstance(shapely_geom, Polygon | MultiPolygon):
                     return False
 
                 # Check if the polygon is valid (no self-intersections, etc.)
@@ -539,9 +594,6 @@ class ZonalStatsService:
                     return False
 
                 # Check if the polygon is not empty
-                if shapely_geom.is_empty:
-                    return False
-
-                return True
+                return not shapely_geom.is_empty
         except Exception:
             return False
