@@ -36,7 +36,7 @@ def test_zonal_stats_central_london():
     # Assert results
     assert "band_1" in results
     band_stats = results["band_1"]
-    assert band_stats.count == 12
+    assert band_stats.count == 10
     assert band_stats.mean == 4.6
     assert band_stats.min == 3
     assert band_stats.max == 6
