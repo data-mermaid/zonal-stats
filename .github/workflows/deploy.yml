@@ -46,6 +46,12 @@ jobs:
           pip install -r requirements.txt
           npm install -g aws-cdk
 
+      - name: Install application dependencies
+        run: pip install -e .
+
+      - name: Run tests
+        run: pytest
+
       - name: Create Lambda Layer
         run: |
           cd infrastructure/lambda_layer
