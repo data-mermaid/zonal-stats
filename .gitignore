@@ -37,6 +37,7 @@ Thumbs.db
 
 # Project specific
 data/
+!tests/data/
 *.log 
 .venv/
 infrastructure/lambda_layer/lambda_layer.zip
