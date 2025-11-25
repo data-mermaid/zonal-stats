@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.schemas import StatType
-from app.services.zonal_stats import ZonalStatsError, GeometryError, RasterError
 
 client = TestClient(app)
 
@@ -47,7 +46,11 @@ def test_zonal_stats_with_image():
     request_data = {
         "aoi": POLYGON_GEOMETRY,
         "stats": [StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
-        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1], "approx_stats": False},
+        "image": {
+            "url": f"file://{os.path.abspath(RASTER_PATH)}",
+            "bands": [1],
+            "approx_stats": False,
+        },
     }
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
@@ -67,7 +70,11 @@ def test_zonal_stats_with_point():
     request_data = {
         "aoi": POINT_GEOMETRY,
         "stats": [StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
-        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1], "approx_stats": False},
+        "image": {
+            "url": f"file://{os.path.abspath(RASTER_PATH)}",
+            "bands": [1],
+            "approx_stats": False,
+        },
     }
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
@@ -91,7 +98,10 @@ def test_invalid_geometry():
                 [-0.11, 51.52],
                 [-0.16, 51.52],
                 [-0.16, 51.5],
-                [-0.11, 51.5],  # Duplicate point that makes the polygon self-intersecting
+                [
+                    -0.11,
+                    51.5,
+                ],  # Duplicate point that makes the polygon self-intersecting
             ]
         ],
     }
@@ -111,7 +121,7 @@ def test_invalid_geometry():
         if "Polygon must be closed" in error_detail:
             passes = True
             break
-    
+
     assert passes, "Expected geometry validation error not found"
 
 
@@ -122,7 +132,9 @@ def test_missing_source():
     response = client.post("/api/v1/zonal-stats", json=request_data)
     assert response.status_code == 422  # Pydantic validation error
     error_detail = response.json()["detail"]
-    assert any("Must specify either image or stac source" in str(err) for err in error_detail)
+    assert any(
+        "Must specify either image or stac source" in str(err) for err in error_detail
+    )
 
 
 def test_both_sources_provided():
@@ -137,7 +149,9 @@ def test_both_sources_provided():
     response = client.post("/api/v1/zonal-stats", json=request_data)
     assert response.status_code == 422  # Pydantic validation error
     error_detail = response.json()["detail"]
-    assert any("Cannot specify both image and stac sources" in str(err) for err in error_detail)
+    assert any(
+        "Cannot specify both image and stac sources" in str(err) for err in error_detail
+    )
 
 
 def test_all_stat_types():
@@ -153,7 +167,11 @@ def test_all_stat_types():
             StatType.STD,
             StatType.MEDIAN,
         ],
-        "image": {"url": f"file://{os.path.abspath(RASTER_PATH)}", "bands": [1], "approx_stats": False},
+        "image": {
+            "url": f"file://{os.path.abspath(RASTER_PATH)}",
+            "bands": [1],
+            "approx_stats": False,
+        },
     }
 
     response = client.post("/api/v1/zonal-stats", json=request_data)
@@ -226,7 +244,9 @@ def test_invalid_point_coordinates():
     response = client.post("/api/v1/zonal-stats", json=request_data)
     assert response.status_code == 422  # Pydantic validation error
     error_detail = response.json()["detail"]
-    assert any("Longitude must be between -180 and 180" in str(err) for err in error_detail)
+    assert any(
+        "Longitude must be between -180 and 180" in str(err) for err in error_detail
+    )
 
 
 def test_invalid_buffer_size():

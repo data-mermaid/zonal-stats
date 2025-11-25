@@ -87,7 +87,7 @@ def test_stac_integration_with_specific_asset():
 
 
 def test_stac_integration_without_asset():
-    """Test zonal statistics calculation with STAC configuration without specifying asset."""
+    """Test zonal statistics calculation with STAC config without asset."""
     with patch("requests.get") as mock_get:
         # Create a mock response object
         mock_response = mock_get.return_value

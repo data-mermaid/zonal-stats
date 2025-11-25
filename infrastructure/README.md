@@ -26,11 +26,27 @@ pip install -r requirements.txt
 aws configure
 ```
 
+## Project Structure
+
+```
+infrastructure/               # <-- You should be in THIS directory for all deployment commands
+├── app.py                   # CDK app entry point
+├── cdk.json                 # CDK configuration
+├── requirements.txt         # CDK Python dependencies (separate from main app)
+├── infrastructure/          # Python package with CDK stack definition (don't cd here)
+│   └── infrastructure_stack.py
+└── lambda_layer/            # Lambda layer build artifacts
+    ├── build_layer.sh       # Script to build the layer
+    └── lambda_layer.zip     # Generated zip file (created by build script)
+```
+
 ## Creating the Lambda Layer
 
-The Lambda layer contains all the Python dependencies required by the Lambda function. To create the layer:
+The Lambda layer contains all the Python dependencies required by the Lambda function.
 
-1. Navigate to the infrastructure directory:
+**Working directory:** `infrastructure/` (the top-level infrastructure directory, not the subdirectory)
+
+1. Navigate to the infrastructure directory from project root:
 
 ```bash
 cd infrastructure
@@ -39,57 +55,59 @@ cd infrastructure
 2. Make the build script executable:
 
 ```bash
-chmod +x build_layer.sh
+chmod +x lambda_layer/build_layer.sh
 ```
 
 3. Run the build script:
 
 ```bash
-./build_layer.sh
+./lambda_layer/build_layer.sh
 ```
 
 This script will:
-
 - Create a temporary directory for building the layer
 - Install all required dependencies into this directory
 - Create a zip file containing the dependencies
 - Clean up temporary files
 
-The resulting `lambda_layer.zip` will be created in the `lambda_layer` directory and will be used by CDK during deployment.
-
-## Project Structure
-
-```
-infrastructure/
-├── app.py                 # CDK app entry point
-├── infrastructure/        # CDK stack definition
-│   └── infrastructure_stack.py
-├── lambda_layer/         # Lambda layer dependencies
-    └── lambda_layer.zip
-```
+The resulting `lambda_layer.zip` will be created in the `lambda_layer/` directory and will be used by CDK during deployment.
 
 ## Deployment Steps
 
-1. Create and activate a Python virtual environment:
+**Working directory:** All commands below should be run from `infrastructure/` (the top-level infrastructure directory).
+
+**About virtual environments:**
+- The project root has a venv for the FastAPI app (created with `uv venv` and `uv sync`)
+- This infrastructure directory needs its own **separate** venv for AWS CDK deployment tools
+- These are two different environments for two different purposes
+
+1. Build the Lambda layer (see "Creating the Lambda Layer" section above):
 
 ```bash
+./lambda_layer/build_layer.sh
+```
+
+2. Create and activate a CDK deployment virtual environment:
+
+```bash
+# If you don't already have a .venv in the infrastructure/ directory:
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
-2. Install dependencies:
+3. Install CDK dependencies in this venv:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Bootstrap your AWS environment (first time only):
+4. Bootstrap your AWS environment (first time only):
 
 ```bash
 cdk bootstrap
 ```
 
-4. Deploy the stack:
+5. Deploy the stack:
 
 ```bash
 cdk deploy

@@ -7,9 +7,6 @@ from aws_cdk import (
     aws_apigateway as apigw,
 )
 from aws_cdk import (
-    aws_iam as iam,
-)
-from aws_cdk import (
     aws_lambda as _lambda,
 )
 from aws_cdk import (
@@ -22,17 +19,7 @@ class InfrastructureStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # Create CloudWatch Logs role for API Gateway
-        cloudwatch_role = iam.Role(
-            self,
-            "ApiGatewayCloudWatchRole",
-            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AmazonAPIGatewayPushToCloudWatchLogs"
-                )
-            ],
-        )
+        # CloudWatch role is automatically created by cloud_watch_role=True below
 
         # Create Lambda layer for all dependencies
         lambda_layer = _lambda.LayerVersion(
@@ -107,10 +94,21 @@ class InfrastructureStack(Stack):
             content_handling=apigw.ContentHandling.CONVERT_TO_TEXT,
         )
 
-        # Add proxy resource to handle all paths
+        # Add root method to handle the root path "/"
+        api.root.add_method("ANY", integration)
+
+        # Add proxy resource to handle all other paths
         proxy = api.root.add_proxy(
             default_integration=integration,
             any_method=True,
+        )
+
+        # Enable CORS for the root resource
+        api.root.add_cors_preflight(
+            allow_origins=apigw.Cors.ALL_ORIGINS,
+            allow_methods=apigw.Cors.ALL_METHODS,
+            allow_headers=apigw.Cors.DEFAULT_HEADERS,
+            max_age=Duration.days(1),
         )
 
         # Enable CORS for the proxy resource

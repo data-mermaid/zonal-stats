@@ -3,7 +3,13 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from ..models.schemas import ZonalStatsRequest, ZonalStatsResponse
-from ..services.zonal_stats import ZonalStatsService, get_stac_asset_url, ZonalStatsError, RasterError, GeometryError, STACError
+from ..services.zonal_stats import (
+    GeometryError,
+    RasterError,
+    STACError,
+    ZonalStatsService,
+    get_stac_asset_url,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -35,7 +41,8 @@ async def calculate_zonal_stats(request: ZonalStatsRequest):
     elif request.stac:
         # Log that STAC input is being processed
         logger.info(
-            f"Processing STAC input with URL: {request.stac.url} and asset: {request.stac.asset}"
+            f"Processing STAC input with URL: {request.stac.url} "
+            f"and asset: {request.stac.asset}"
         )
         url = get_stac_asset_url(request.stac.url, request.stac.asset)
         bands = request.stac.bands
@@ -56,11 +63,13 @@ async def calculate_zonal_stats(request: ZonalStatsRequest):
         raise HTTPException(
             status_code=e.status_code,
             detail=e.message,
-        )
+        ) from None
     except Exception as e:
         # For any other unexpected errors
-        logger.error(f"Unexpected error calculating zonal statistics: {str(e)}", exc_info=True)
+        logger.error(
+            f"Unexpected error calculating zonal statistics: {str(e)}", exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while calculating zonal statistics",
-        )
+        ) from e

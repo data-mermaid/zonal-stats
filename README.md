@@ -2,7 +2,8 @@
 
 A FastAPI application that calculates zonal statistics from raster data using GeoJSON geometries.
 
-> For the initial requirements and specifications, see [specs.md](specs.md)
+> To run the examples below in the MERMAID deployment of this API, use https://api.zonalstats.datamermaid.org/ as the root url.   
+Endpoint documentation with executable request blocks is available at the  [/docs](https://api.zonalstats.datamermaid.org/docs) or [/redoc](https://api.zonalstats.datamermaid.org/redoc) endpoints.
 
 ## Features
 

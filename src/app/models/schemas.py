@@ -1,6 +1,13 @@
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    RootModel,
+    field_validator,
+    model_validator,
+)
 
 
 class StatType(str, Enum):
@@ -53,7 +60,7 @@ class PolygonGeometry(BaseModel):
     type: str = "Polygon"
     coordinates: list[list[list[float]]] = Field(
         description="[[[x1, y1], [x2, y2], ...]]",
-        min_items=1,
+        min_length=1,
     )
 
     @field_validator("coordinates")
@@ -63,7 +70,9 @@ class PolygonGeometry(BaseModel):
             raise ValueError("Polygon must have at least 3 points")
         # Check if first and last points are the same (closed polygon)
         if v[0][0] != v[0][-1]:
-            raise ValueError("Polygon must be closed (first and last points must be the same)")
+            raise ValueError(
+                "Polygon must be closed (first and last points must be the same)"
+            )
         return v
 
 
@@ -72,7 +81,7 @@ class ImageConfig(BaseModel):
     bands: list[int] = Field(
         default=[1],
         description="List of band indices to process",
-        min_items=1,
+        min_length=1,
     )
     approx_stats: bool = Field(
         default=False,
@@ -96,7 +105,7 @@ class StacConfig(BaseModel):
     bands: list[int] = Field(
         default=[1],
         description="List of band indices to process",
-        min_items=1,
+        min_length=1,
     )
     approx_stats: bool = Field(
         default=False,
@@ -130,7 +139,7 @@ class ZonalStatsRequest(BaseModel):
         description="STAC configuration",
     )
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_sources(self):
         """Validate that exactly one source (image or stac) is provided."""
         if self.image is not None and self.stac is not None:
