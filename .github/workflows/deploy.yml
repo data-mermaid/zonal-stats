@@ -5,12 +5,14 @@ on:
     paths:
       - 'infrastructure/**'
       - 'src/**'
+      - 'tests/**'
       - '.github/workflows/deploy.yml'
     branches:
       - main
   pull_request:
     paths:
       - 'infrastructure/**'
+      - 'tests/**'
       - '.github/workflows/deploy.yml'
     branches:
       - main
