@@ -47,7 +47,9 @@ jobs:
           npm install -g aws-cdk
 
       - name: Install application dependencies
-        run: pip install -e .
+        run: |
+          pip install -e .
+          pip install pytest httpx
 
       - name: Run tests
         run: pytest
