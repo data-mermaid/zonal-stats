@@ -1,0 +1,414 @@
+type: collection.insomnia.rest/5.0
+name: Zonal API
+meta:
+  id: wrk_89631c502d7a47478e14d9d5b0fa5c9d
+  created: 1769115704859
+  modified: 1769115704859
+  description: ""
+collection:
+  - url: "{{ _.api_url }}/api/v1/zonal-stats/vector"
+    name: Zonal Stats - Polygon
+    meta:
+      id: req_bc29b2ac2d5b4c0cba82105bc4c180e5
+      created: 1769118115467
+      modified: 1769202175313
+      isPrivate: false
+      description: ""
+      sortKey: -1769118115467
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+          "aoi":{
+                "type": "Polygon",
+                "coordinates": [
+                  [
+                    [
+                      -78.520342461558826,
+                      24.238269230532779
+                    ],
+                    [
+                      -78.511127176691531,
+                      24.273813900735167
+                    ],
+                    [
+                      -78.484797791356428,
+                      24.275130370001921
+                    ],
+                    [
+                      -78.471633098688883,
+                      24.251433923200331
+                    ],
+                    [
+                      -78.474266037222392,
+                      24.231686884199004
+                    ],
+                    [
+                      -78.494013076223723,
+                      24.229053945665495
+                    ],
+                    [
+                      -78.520342461558826,
+                      24.238269230532779
+                    ]
+                  ]
+                ]
+              },
+          "stats": [
+            "mean"
+          ],
+            "url": "https://d2uu99zl9amnvy.cloudfront.net/assets/10da4b11-c79f-4ce7-b359-0d4710a1f0fd/c38923d6-997b-424f-87f5-2b1759af2532/data_human_pressures.parquet",
+            "columns": [
+              "score",
+        			"pop_count"
+            ],
+            "geometry_column": "geom",
+            "intersection_mode": "intersect",
+            "approx_stats": false
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+      - name: User-Agent
+        value: insomnia/12.0.0
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ _.api_url }}/api/v1/zonal-stats/vector"
+    name: Zonal Stats - Touches
+    meta:
+      id: req_b80a38569ede4e64a5c5ec17990776c5
+      created: 1769118887295
+      modified: 1769202198963
+      isPrivate: false
+      description: ""
+      sortKey: -1762995867771.5
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+        	"aoi": {
+        		"type": "Point",
+        		"radius": 0,
+        		"coordinates": [
+        			-78.5224,
+        			24.1332
+        		]
+        	},
+        	"stats": [
+        		"mean"
+        	],
+        		"url": "https://d2uu99zl9amnvy.cloudfront.net/assets/10da4b11-c79f-4ce7-b359-0d4710a1f0fd/c38923d6-997b-424f-87f5-2b1759af2532/data_human_pressures.parquet",
+        		"columns": [
+        			"score",
+        			"pop_count"
+        		],
+        		"geometry_column": "geom",
+        		"intersection_mode": "intersect",
+        		"approx_stats": false
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+      - name: User-Agent
+        value: insomnia/12.0.0
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ _.api_url }}/api/v1/zonal-stats/vector"
+    name: Zonal Stats - Polygon Overlaps
+    meta:
+      id: req_dd87e11896f44e2489ceb281ac3f3590
+      created: 1769119011402
+      modified: 1769203861263
+      isPrivate: false
+      description: ""
+      sortKey: -1766056991619.25
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+          "aoi":{
+                "type": "Polygon",
+                "coordinates": [
+                  [
+                    [
+                      -78.57826710929605,
+                      24.163230482327737
+                    ],
+                    [
+                      -78.530874215692862,
+                      24.173762236461776
+                    ],
+                    [
+                      -78.521658930825581,
+                      24.123736404325083
+                    ],
+                    [
+                      -78.571684762962263,
+                      24.117154057991307
+                    ],
+                    [
+                      -78.57826710929605,
+                      24.131635219925613
+                    ],
+                    [
+                      -78.57826710929605,
+                      24.163230482327737
+                    ]
+                  ]
+                ]
+              },
+          "stats": [
+            "mean"
+          ],
+            "url": "https://d2uu99zl9amnvy.cloudfront.net/assets/10da4b11-c79f-4ce7-b359-0d4710a1f0fd/c38923d6-997b-424f-87f5-2b1759af2532/data_human_pressures.parquet",
+            "columns": [
+              "score",
+        			"pop_count"
+            ],
+            "geometry_column": "geom",
+            "intersection_mode": "intersect",
+            "approx_stats": false
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+      - name: User-Agent
+        value: insomnia/12.0.0
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ _.api_url }}/api/v1/zonal-stats/raster"
+    name: Raster Stats - COG Polygon
+    meta:
+      id: req_raster_cog_polygon
+      created: 1769203861263
+      modified: 1769203861263
+      isPrivate: false
+      description: "Calculate zonal statistics from a Cloud Optimized GeoTIFF"
+      sortKey: -1769203861263
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+          "aoi": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [-78.520342461558826, 24.238269230532779],
+                [-78.511127176691531, 24.273813900735167],
+                [-78.484797791356428, 24.275130370001921],
+                [-78.471633098688883, 24.251433923200331],
+                [-78.474266037222392, 24.231686884199004],
+                [-78.494013076223723, 24.229053945665495],
+                [-78.520342461558826, 24.238269230532779]
+              ]
+            ]
+          },
+          "url": "https://example.com/path/to/cog.tif",
+          "stats": ["mean", "min", "max", "count"],
+          "bands": [1],
+          "approx_stats": false
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+      - name: User-Agent
+        value: insomnia/12.0.0
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ _.api_url }}/api/v1/zonal-stats/raster"
+    name: Raster Stats - COG Point Buffer
+    meta:
+      id: req_raster_cog_point
+      created: 1769203861264
+      modified: 1769203861264
+      isPrivate: false
+      description: "Calculate zonal statistics from COG using a point with buffer"
+      sortKey: -1769203861264
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+          "aoi": {
+            "type": "Point",
+            "coordinates": [-78.5224, 24.1332],
+            "buffer_size": 0.01
+          },
+          "url": "https://example.com/path/to/cog.tif",
+          "stats": ["mean", "sum", "std"],
+          "bands": [1, 2],
+          "approx_stats": false
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+      - name: User-Agent
+        value: insomnia/12.0.0
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ _.api_url }}/api/v1/zonal-stats/raster/stac"
+    name: Raster Stats - STAC Item
+    meta:
+      id: req_raster_stac
+      created: 1769203861265
+      modified: 1769203861265
+      isPrivate: false
+      description: "Calculate zonal statistics from a STAC item raster asset"
+      sortKey: -1769203861265
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+          "aoi": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [-78.520342461558826, 24.238269230532779],
+                [-78.511127176691531, 24.273813900735167],
+                [-78.484797791356428, 24.275130370001921],
+                [-78.471633098688883, 24.251433923200331],
+                [-78.474266037222392, 24.231686884199004],
+                [-78.494013076223723, 24.229053945665495],
+                [-78.520342461558826, 24.238269230532779]
+              ]
+            ]
+          },
+          "url": "https://example.com/stac/item.json",
+          "asset": "data",
+          "stats": ["mean", "min", "max"],
+          "bands": [1],
+          "approx_stats": false
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+      - name: User-Agent
+        value: insomnia/12.0.0
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ _.api_url }}/api/v1/zonal-stats/vector/stac"
+    name: Vector Stats - STAC Item
+    meta:
+      id: req_vector_stac
+      created: 1769203861266
+      modified: 1769203861266
+      isPrivate: false
+      description: "Calculate zonal statistics from a STAC item GeoParquet asset"
+      sortKey: -1769203861266
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+          "aoi": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [-78.520342461558826, 24.238269230532779],
+                [-78.511127176691531, 24.273813900735167],
+                [-78.484797791356428, 24.275130370001921],
+                [-78.471633098688883, 24.251433923200331],
+                [-78.474266037222392, 24.231686884199004],
+                [-78.494013076223723, 24.229053945665495],
+                [-78.520342461558826, 24.238269230532779]
+              ]
+            ]
+          },
+          "url": "https://example.com/stac/item.json",
+          "asset": "data",
+          "columns": ["score", "pop_count"],
+          "stats": ["mean", "sum"],
+          "geometry_column": "geometry",
+          "intersection_mode": "intersect",
+          "approx_stats": false
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
+      - name: User-Agent
+        value: insomnia/12.0.0
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ _.api_url }}/"
+    name: Root - API Info
+    meta:
+      id: req_root
+      created: 1769203861267
+      modified: 1769203861267
+      isPrivate: false
+      description: "Get API information and available endpoints"
+      sortKey: -1769203861267
+    method: GET
+    headers:
+      - name: User-Agent
+        value: insomnia/12.0.0
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_d4f6536507d55bc467c45c753e153832e1b0d7e5
+    created: 1769115704883
+    modified: 1769115704883
+environments:
+  name: Base Environment
+  meta:
+    id: env_d4f6536507d55bc467c45c753e153832e1b0d7e5
+    created: 1769115704882
+    modified: 1769118104828
+    isPrivate: false
+  data:
+    api_url: http://100.73.21.59:8000
