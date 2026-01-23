@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -6,7 +7,6 @@ from pydantic import (
     Field,
     RootModel,
     field_validator,
-    model_validator,
 )
 
 
@@ -27,9 +27,51 @@ class StatType(str, Enum):
     RANGE = "range"
     NODATA = "nodata"
 
-    # Special statistics
-    AREA = "area"
-    FREQ_HIST = "freq_hist"
+    # Special statistics (work for both raster and vector)
+    AOI_AREA = "aoi_area"  # Area of the query AOI in square meters
+    DATA_AREA = "data_area"  # Area of data within AOI (valid pixels/features)
+    FREQ_HIST = "freq_hist"  # Raster only
+
+    # Vector-specific statistics
+    DENSITY = "density"  # Features per km² of AOI
+
+
+# Stats filtering constants and functions
+RASTER_ONLY_STATS = {
+    StatType.NODATA,
+    StatType.MAJORITY,
+    StatType.MINORITY,
+    StatType.FREQ_HIST,
+}
+VECTOR_ONLY_STATS = {StatType.DENSITY}
+
+
+def filter_raster_stats(stats: list[StatType] | None) -> list[StatType]:
+    """Filter stats to only those valid for raster data."""
+    if stats is None:
+        base = [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
+    else:
+        base = [s for s in stats if s not in VECTOR_ONLY_STATS]
+    # Always include area stats
+    if StatType.AOI_AREA not in base:
+        base.append(StatType.AOI_AREA)
+    if StatType.DATA_AREA not in base:
+        base.append(StatType.DATA_AREA)
+    return base
+
+
+def filter_vector_stats(stats: list[StatType] | None) -> list[StatType]:
+    """Filter stats to only those valid for vector data."""
+    if stats is None:
+        base = [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
+    else:
+        base = [s for s in stats if s not in RASTER_ONLY_STATS]
+    # Always include area stats
+    if StatType.AOI_AREA not in base:
+        base.append(StatType.AOI_AREA)
+    if StatType.DATA_AREA not in base:
+        base.append(StatType.DATA_AREA)
+    return base
 
 
 class PointGeometry(BaseModel):
@@ -76,87 +118,166 @@ class PolygonGeometry(BaseModel):
         return v
 
 
-class ImageConfig(BaseModel):
-    url: str = Field(description="URL to the raster image")
-    bands: list[int] = Field(
-        default=[1],
-        description="List of band indices to process",
-        min_length=1,
-    )
-    approx_stats: bool = Field(
-        default=False,
-        description="Whether to use approximate statistics for large areas",
-    )
-
-    @field_validator("url")
-    @classmethod
-    def validate_url(cls, v):
-        if not v.startswith(("http://", "https://", "s3://", "file://")):
-            raise ValueError("URL must start with http://, https://, s3://, or file://")
-        return v
+# =============================================================================
+# New focused request models for the refactored API
+# =============================================================================
 
 
-class StacConfig(BaseModel):
-    url: str = Field(description="URL to the STAC item")
-    asset: str | None = Field(
-        default=None,
-        description="Name of the asset to use (if None, first asset will be used)",
-    )
-    bands: list[int] = Field(
-        default=[1],
-        description="List of band indices to process",
-        min_length=1,
-    )
-    approx_stats: bool = Field(
-        default=False,
-        description="Whether to use approximate statistics for large areas",
-    )
-
-    @field_validator("url")
-    @classmethod
-    def validate_url(cls, v):
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("STAC URL must start with http:// or https://")
-        return v
+def _validate_url(v: str, protocols: tuple[str, ...]) -> str:
+    """Common URL validation helper."""
+    if not v.startswith(protocols):
+        raise ValueError(f"URL must start with one of: {', '.join(protocols)}")
+    return v
 
 
-class ZonalStatsRequest(BaseModel):
+def _validate_stats_list(v: list[StatType] | None) -> list[StatType] | None:
+    """Validate that stats list is not empty if provided."""
+    if v is not None and len(v) == 0:
+        raise ValueError("Statistics list cannot be empty")
+    return v
+
+
+class RasterStatsRequest(BaseModel):
+    """Request for direct COG raster statistics."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     aoi: PointGeometry | PolygonGeometry = Field(
-        description="Area of interest (Point or Polygon geometry)"
+        ..., description="Area of interest (Point or Polygon geometry)"
     )
     stats: list[StatType] | None = Field(
-        default=None,
-        description="List of statistics to calculate",
+        default=None, description="Statistics to calculate"
     )
-    image: ImageConfig | None = Field(
-        default=None,
-        description="Image configuration",
+    url: str = Field(..., description="URL to Cloud Optimized GeoTIFF")
+    bands: list[int] = Field(
+        default=[1], description="Band indices to process", min_length=1
     )
-    stac: StacConfig | None = Field(
-        default=None,
-        description="STAC configuration",
+    approx_stats: bool = Field(
+        default=False, description="Use overviews for faster approximate stats"
     )
 
-    @model_validator(mode="after")
-    def validate_sources(self):
-        """Validate that exactly one source (image or stac) is provided."""
-        if self.image is not None and self.stac is not None:
-            raise ValueError("Cannot specify both image and stac sources")
-        if self.image is None and self.stac is None:
-            raise ValueError("Must specify either image or stac source")
-        return self
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v):
+        return _validate_url(v, ("http://", "https://", "s3://", "file://"))
 
     @field_validator("stats")
     @classmethod
-    def set_default_stats(cls, v):
-        if v is None:
-            # Default to the basic statistics
-            return [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
-        if not v:
-            raise ValueError("Statistics list cannot be empty")
-        return v
+    def validate_stats(cls, v):
+        return _validate_stats_list(v)
+
+
+class RasterStacStatsRequest(BaseModel):
+    """Request for STAC-based raster statistics."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    aoi: PointGeometry | PolygonGeometry = Field(
+        ..., description="Area of interest (Point or Polygon geometry)"
+    )
+    stats: list[StatType] | None = Field(
+        default=None, description="Statistics to calculate"
+    )
+    url: str = Field(..., description="URL to STAC Item JSON")
+    asset: str | None = Field(
+        default=None, description="Asset key (uses first asset if not specified)"
+    )
+    bands: list[int] = Field(
+        default=[1], description="Band indices to process", min_length=1
+    )
+    approx_stats: bool = Field(
+        default=False, description="Use overviews for faster approximate stats"
+    )
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v):
+        return _validate_url(v, ("http://", "https://"))
+
+    @field_validator("stats")
+    @classmethod
+    def validate_stats(cls, v):
+        return _validate_stats_list(v)
+
+
+class VectorStatsRequest(BaseModel):
+    """Request for direct GeoParquet vector statistics."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    aoi: PointGeometry | PolygonGeometry = Field(
+        ..., description="Area of interest (Point or Polygon geometry)"
+    )
+    stats: list[StatType] | None = Field(
+        default=None, description="Statistics to calculate"
+    )
+    url: str = Field(..., description="URL to GeoParquet file")
+    columns: list[str] = Field(
+        ..., description="Numeric columns to calculate statistics for", min_length=1
+    )
+    geometry_column: str = Field(
+        default="geometry", description="Name of geometry column"
+    )
+    intersection_mode: Literal["intersect", "touch"] = Field(
+        default="intersect",
+        description="'intersect' for area-weighted stats, 'touch' for unweighted",
+    )
+    approx_stats: bool = Field(
+        default=False, description="Reserved for future optimization"
+    )
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v):
+        return _validate_url(v, ("http://", "https://", "s3://", "file://"))
+
+    @field_validator("stats")
+    @classmethod
+    def validate_stats(cls, v):
+        return _validate_stats_list(v)
+
+
+class VectorStacStatsRequest(BaseModel):
+    """Request for STAC-based vector statistics."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    aoi: PointGeometry | PolygonGeometry = Field(
+        ..., description="Area of interest (Point or Polygon geometry)"
+    )
+    stats: list[StatType] | None = Field(
+        default=None, description="Statistics to calculate"
+    )
+    url: str = Field(..., description="URL to STAC Item JSON")
+    asset: str | None = Field(default=None, description="Asset key for GeoParquet")
+    columns: list[str] = Field(
+        ..., description="Numeric columns to calculate statistics for", min_length=1
+    )
+    geometry_column: str = Field(
+        default="geometry", description="Name of geometry column"
+    )
+    intersection_mode: Literal["intersect", "touch"] = Field(
+        default="intersect",
+        description="'intersect' for area-weighted stats, 'touch' for unweighted",
+    )
+    approx_stats: bool = Field(
+        default=False, description="Reserved for future optimization"
+    )
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v):
+        return _validate_url(v, ("http://", "https://"))
+
+    @field_validator("stats")
+    @classmethod
+    def validate_stats(cls, v):
+        return _validate_stats_list(v)
+
+
+# =============================================================================
+# Response models
+# =============================================================================
 
 
 class BandStats(BaseModel):
@@ -167,4 +288,4 @@ class BandStats(BaseModel):
 
 class ZonalStatsResponse(RootModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    root: dict[str, BandStats] = Field(description="Statistics for each band")
+    root: dict[str, BandStats] = Field(description="Statistics for each band/column")

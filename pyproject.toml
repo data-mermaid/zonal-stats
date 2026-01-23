@@ -17,6 +17,7 @@ dependencies = [
     "pyproj>=3.7.1",
     "mangum>=0.17.0",
     "requests",
+    "duckdb>=1.0.0",
 ]
 
 [tool.ruff]

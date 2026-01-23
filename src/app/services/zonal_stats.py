@@ -3,7 +3,6 @@ import math
 
 import numpy as np
 import rasterio
-import requests
 from pyproj import CRS, Transformer
 from rasterio.warp import transform_geom
 from rasterstats import zonal_stats
@@ -46,6 +45,19 @@ class STACError(ZonalStatsError):
     """Exception for STAC-related errors."""
 
     pass
+
+
+class VectorError(ZonalStatsError):
+    """Exception for vector data operations."""
+
+    pass
+
+
+class UnsupportedMediaTypeError(ZonalStatsError):
+    """Exception for unsupported file formats (HTTP 415)."""
+
+    def __init__(self, message: str):
+        super().__init__(message, status_code=415)
 
 
 def create_buffer_polygon(point: PointGeometry) -> dict:
@@ -105,45 +117,6 @@ def create_buffer_polygon(point: PointGeometry) -> dict:
         raise GeometryError(f"Error creating buffer polygon: {str(e)}") from e
 
 
-def get_stac_asset_url(stac_url: str, asset_key: str | None = None) -> str:
-    """
-    Fetch a STAC item from the given URL and extract the asset URL (href)
-    for the specified asset key.
-    If asset_key is None, use the first asset in the item.
-    """
-    try:
-        logger.info(f"Fetching STAC item from {stac_url}")
-        resp = requests.get(stac_url)
-        resp.raise_for_status()
-        stac_item = resp.json()
-        assets = stac_item.get("assets", {})
-        if not assets:
-            raise STACError("No assets found in the STAC item.")
-        if asset_key:
-            asset = assets.get(asset_key)
-            if not asset:
-                raise STACError(f"Asset '{asset_key}' not found in the STAC item.")
-        else:
-            # Use the first asset if no key is provided
-            asset = next(iter(assets.values()))
-        href = asset.get("href")
-        logger.info(f"Asset href: {href}")
-        if not href:
-            if asset_key:
-                raise STACError(
-                    f"Asset '{asset_key}' does not contain an 'href' field."
-                )
-            else:
-                raise STACError("The first asset does not contain an 'href' field.")
-        return href
-    except requests.RequestException as e:
-        raise STACError(f"Error fetching STAC item: {str(e)}") from e
-    except Exception as e:
-        if isinstance(e, ZonalStatsError):
-            raise
-        raise STACError(f"Unexpected error processing STAC item: {str(e)}") from e
-
-
 class ZonalStatsService:
     def __init__(self, url: str, bands: list[int], approx_stats: bool = True):
         self.url = url
@@ -153,7 +126,6 @@ class ZonalStatsService:
     def _process_stats_list(self, stats: list[StatType] | None) -> list[str]:
         """Process the list of statistics."""
         if stats is None:
-            # Use default statistics
             stats = [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
         elif not stats:
             raise ZonalStatsError("Statistics list cannot be empty")
@@ -162,9 +134,18 @@ class ZonalStatsService:
         raster_stats = [
             stat.value
             for stat in stats
-            if stat not in [StatType.AREA, StatType.FREQ_HIST]
+            if stat not in [StatType.AOI_AREA, StatType.DATA_AREA, StatType.FREQ_HIST]
         ]
         return raster_stats
+
+    def _ensure_area_stats(self, stats: list[StatType]) -> list[StatType]:
+        """Ensure aoi_area and data_area are always included."""
+        result = list(stats)
+        if StatType.AOI_AREA not in result:
+            result.append(StatType.AOI_AREA)
+        if StatType.DATA_AREA not in result:
+            result.append(StatType.DATA_AREA)
+        return result
 
     def _validate_area(self, shapely_geom: Polygon | MultiPolygon) -> None:
         """Validate that the area is within acceptable limits."""
@@ -425,9 +406,12 @@ class ZonalStatsService:
         try:
             band_stats_dict = {}
             for stat in stats:
-                if stat == StatType.AREA:
-                    # Area is calculated in square meters
-                    band_stats_dict[stat.value] = float(stats_dict.get("area", 0))
+                if stat == StatType.AOI_AREA:
+                    # AOI area in square meters
+                    band_stats_dict[stat.value] = float(stats_dict.get("aoi_area", 0))
+                elif stat == StatType.DATA_AREA:
+                    # Data area (valid pixels) in square meters
+                    band_stats_dict[stat.value] = float(stats_dict.get("data_area", 0))
                 elif stat == StatType.FREQ_HIST:
                     # Frequency histogram is already calculated
                     band_stats_dict[stat.value] = dict(stats_dict.get("freq_hist", {}))
@@ -515,11 +499,13 @@ class ZonalStatsService:
                 # Process the statistics list
                 processed_stats = self._process_stats_list(stats)
                 # Get the actual stats to use for processing results
-                stats_to_use = (
+                # Always include aoi_area and data_area
+                base_stats = (
                     stats
                     if stats is not None
                     else [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
                 )
+                stats_to_use = self._ensure_area_stats(base_stats)
 
                 # Process each band
                 results = {}
@@ -540,8 +526,8 @@ class ZonalStatsService:
 
                     # Initialize stats dictionary with custom statistics
                     stats_dict = {}
-                    if StatType.AREA in stats_to_use:
-                        stats_dict["area"] = self._calculate_area_in_square_meters(
+                    if StatType.AOI_AREA in stats_to_use:
+                        stats_dict["aoi_area"] = self._calculate_area_in_square_meters(
                             shapely_geom, geom_crs
                         )
                     if StatType.FREQ_HIST in stats_to_use:
@@ -549,17 +535,58 @@ class ZonalStatsService:
 
                     # Calculate rasterstats if there are any standard statistics
                     # requested
+                    window_transform = src.window_transform(window)
                     if processed_stats:
                         raster_stats_dict = zonal_stats(
                             shapely_geom,
                             band_data,
-                            affine=src.window_transform(window),
+                            affine=window_transform,
                             stats=processed_stats,
                             nodata=np.nan,
                             all_touched=True,
                             raster_out=False,
                         )[0]
                         stats_dict.update(raster_stats_dict)
+
+                    # Calculate data_area (area of valid pixels) if requested
+                    if StatType.DATA_AREA in stats_to_use:
+                        # Count valid (non-NaN) pixels within the geometry
+                        valid_pixel_stats = zonal_stats(
+                            shapely_geom,
+                            band_data,
+                            affine=window_transform,
+                            stats=["count"],
+                            nodata=np.nan,
+                            all_touched=True,
+                            raster_out=False,
+                        )[0]
+                        valid_count = valid_pixel_stats.get("count", 0) or 0
+                        # Calculate pixel area in square meters
+                        pixel_width = abs(window_transform.a)
+                        pixel_height = abs(window_transform.e)
+                        # Adjust for overview level
+                        if overview_level > 0:
+                            overviews = src.overviews(band_idx)
+                            overview_factor = overviews[overview_level - 1]
+                            pixel_width *= overview_factor
+                            pixel_height *= overview_factor
+                        # Convert to square meters if CRS is geographic
+                        if src_crs.is_geographic:
+                            # Approximate conversion at geometry centroid
+                            center = shapely_geom.centroid
+                            meters_per_degree_lon = 111320 * math.cos(
+                                math.radians(center.y)
+                            )
+                            meters_per_degree_lat = 110540
+                            pixel_area_m2 = (
+                                pixel_width
+                                * meters_per_degree_lon
+                                * pixel_height
+                                * meters_per_degree_lat
+                            )
+                        else:
+                            pixel_area_m2 = pixel_width * pixel_height
+                        stats_dict["data_area"] = float(valid_count * pixel_area_m2)
 
                     logger.info(f"Calculated stats for band {band_idx}: {stats_dict}")
 
