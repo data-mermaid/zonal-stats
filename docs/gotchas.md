@@ -1,0 +1,39 @@
+# Gotchas
+
+Common pitfalls and how to avoid them.
+
+**1. Coordinate order is `[longitude, latitude]`**
+GeoJSON uses `[lon, lat]`, not `[lat, lon]`. Swapping them will query the wrong location or fail validation (latitude > 90).
+
+**2. Polygon rings must be closed**
+The first and last coordinate in each ring must be identical. The API will reject unclosed rings with a 400 error.
+
+**3. Bare points sample a single pixel (raster)**
+A `Point` without `radius` does not run zonal stats -- it samples the one pixel directly under the point. If you want area-based statistics, provide a `radius`.
+
+**4. `aoi_area` is 0 for bare points**
+Points have no area. If you need a meaningful `aoi_area`, use a `radius` to buffer the point into a polygon.
+
+**5. Vector endpoints only accept GeoParquet**
+Passing a GeoJSON, Shapefile, or any non-Parquet URL to a vector endpoint returns HTTP 415. Convert your data to GeoParquet first.
+
+**6. `geometry_column` defaults to `"geometry"`**
+If your GeoParquet file uses a different column name (e.g., `geom`, `the_geom`), you must set `geometry_column` explicitly.
+
+**7. Empty `stats` array is rejected**
+`"stats": []` fails validation. Either omit `stats` entirely (to get defaults) or provide at least one stat.
+
+**8. Incompatible stats are silently dropped**
+Requesting `freq_hist` on a vector endpoint doesn't error -- it's removed. Requesting `density` on a raster endpoint is also silently ignored. Check the response to confirm which stats were returned.
+
+**9. `approx_stats` requires raster overviews**
+If the COG has no overviews, `approx_stats` reads full-resolution data. It still bypasses the area/pixel limit checks, but results will be exact, not approximate.
+
+**10. Area and pixel limits only apply without `approx_stats`**
+If your AOI exceeds 1M km&sup2; or 100M pixels, the request fails with a 400 unless you set `"approx_stats": true`.
+
+**11. STAC endpoints only accept HTTP(S) URLs**
+`s3://` and `file://` are not valid for the STAC `url` field. The resolved asset href can be any protocol, but the STAC Item itself must be reachable over HTTP.
+
+**12. Vector `mean` is area-weighted in `intersect` mode**
+For polygon or buffered-point queries, `mean` is weighted by the intersection area ratio, not a simple average. This is intentional -- a feature half-inside your AOI contributes half its value.
