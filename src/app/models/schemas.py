@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -77,7 +76,7 @@ def filter_vector_stats(stats: list[StatType] | None) -> list[StatType]:
 class PointGeometry(BaseModel):
     type: str = "Point"
     coordinates: list[float] = Field(description="[longitude, latitude]")
-    buffer_size: float = Field(default=0.001, description="buffer size in meters")
+    radius: float | None = Field(default=None, description="buffer radius in meters")
 
     @field_validator("coordinates")
     @classmethod
@@ -90,11 +89,11 @@ class PointGeometry(BaseModel):
             raise ValueError("Latitude must be between -90 and 90")
         return v
 
-    @field_validator("buffer_size")
+    @field_validator("radius")
     @classmethod
-    def validate_buffer_size(cls, v):
-        if v <= 0:
-            raise ValueError("Buffer size must be greater than 0")
+    def validate_radius(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("Radius must be non-negative")
         return v
 
 
@@ -218,10 +217,6 @@ class VectorStatsRequest(BaseModel):
     geometry_column: str = Field(
         default="geometry", description="Name of geometry column"
     )
-    intersection_mode: Literal["intersect", "touch"] = Field(
-        default="intersect",
-        description="'intersect' for area-weighted stats, 'touch' for unweighted",
-    )
     approx_stats: bool = Field(
         default=False, description="Reserved for future optimization"
     )
@@ -255,10 +250,6 @@ class VectorStacStatsRequest(BaseModel):
     )
     geometry_column: str = Field(
         default="geometry", description="Name of geometry column"
-    )
-    intersection_mode: Literal["intersect", "touch"] = Field(
-        default="intersect",
-        description="'intersect' for area-weighted stats, 'touch' for unweighted",
     )
     approx_stats: bool = Field(
         default=False, description="Reserved for future optimization"

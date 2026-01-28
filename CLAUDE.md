@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-A FastAPI application that calculates zonal statistics from raster data (Cloud Optimized GeoTIFFs) using GeoJSON geometries. Designed to run on AWS Lambda.
+A FastAPI application that calculates zonal statistics from raster and vector data using GeoJSON geometries. Supports Cloud Optimized GeoTIFFs (COG) for raster and GeoParquet for vector data. Designed to run on AWS Lambda.
 
-**Stack:** FastAPI, Rasterio, Rasterstats, Shapely, Pydantic, Docker, Mangum (Lambda adapter)
+**Stack:** FastAPI, Rasterio, Rasterstats, DuckDB, Shapely, Pydantic, Docker, Mangum (Lambda adapter)
 
 ## Development Commands
 
@@ -27,7 +27,7 @@ pip install -e .
 uv run uvicorn app.main:app --reload --host 0.0.0.0
 
 # Standard
-uvicorn app.main:app --reload --host 0.0.0.0  
+uvicorn app.main:app --reload --host 0.0.0.0
 
 # API will be available at http://localhost:8000
 ```
@@ -39,10 +39,11 @@ uvicorn app.main:app --reload --host 0.0.0.0
 pytest
 
 # Run specific test file
-pytest tests/test_zonal_stats.py
+pytest tests/test_raster_endpoints.py
+pytest tests/test_vector_endpoints.py
 
 # Run specific test
-pytest tests/test_api_endpoints.py::test_zonal_stats_with_cog
+pytest tests/test_raster_endpoints.py::test_raster_stats_basic
 ```
 
 **Test configuration:** `pyproject.toml` sets `pythonpath = ["src"]`
@@ -81,9 +82,18 @@ See `infrastructure/README.md` for CDK deployment instructions. Key steps:
 1. Create Lambda layer: `cd infrastructure && ./build_layer.sh`
 2. Deploy with CDK: `cdk deploy`
 
-The Lambda handler is created via Mangum in `src/app/main.py:71`.
+The Lambda handler is created via Mangum in `src/app/main.py`.
 
 ## Architecture
+
+### API Endpoints (v0.2.0)
+
+```
+POST /api/v1/zonal-stats/raster        # Stats from Cloud Optimized GeoTIFF
+POST /api/v1/zonal-stats/raster/stac   # Stats from STAC raster asset
+POST /api/v1/zonal-stats/vector        # Stats from GeoParquet
+POST /api/v1/zonal-stats/vector/stac   # Stats from STAC vector asset
+```
 
 ### Project Structure
 
@@ -91,14 +101,21 @@ The Lambda handler is created via Mangum in `src/app/main.py:71`.
 src/app/
 ├── main.py                    # FastAPI app, CORS, exception handlers, Lambda handler
 ├── api/
-│   └── endpoints.py           # POST /api/v1/zonal-stats endpoint
+│   └── endpoints.py           # Four focused endpoints with sub-routers
 ├── models/
 │   └── schemas.py             # Pydantic models for request/response validation
 └── services/
-    └── zonal_stats.py         # Core zonal statistics calculation logic
+    ├── zonal_stats.py         # Raster statistics calculation (ZonalStatsService)
+    ├── zonal_vector.py        # Vector statistics calculation (ZonalVectorService)
+    └── stac.py                # STAC item fetching and asset extraction
 
-tests/                         # Pytest test suite
-infrastructure/                # AWS CDK deployment code
+tests/
+├── test_raster_endpoints.py   # Raster endpoint tests
+├── test_vector_endpoints.py   # Vector endpoint tests
+├── test_stac_integration.py   # STAC integration tests
+├── test_zonal_stats.py        # ZonalStatsService unit tests
+├── test_vector_stats.py       # ZonalVectorService unit tests
+└── data/                      # Test data files
 ```
 
 ### Key Components
@@ -106,72 +123,86 @@ infrastructure/                # AWS CDK deployment code
 **1. Geometry Handling (`schemas.py`)**
 
 Two geometry types supported:
-- `PointGeometry`: Point with buffer in meters (default 0.001m)
+- `PointGeometry`: Point with optional `radius` in meters (default `None`)
 - `PolygonGeometry`: Standard GeoJSON polygon
 
-Points are converted to polygons via UTM projection buffering in `zonal_stats.py:42-93`.
+**2. Request Models (`schemas.py`)**
 
-**2. Data Sources (`schemas.py`)**
+Four focused request models (one per endpoint):
+- `RasterStatsRequest`: Direct COG URL + bands + approx_stats
+- `RasterStacStatsRequest`: STAC URL + asset + bands + approx_stats
+- `VectorStatsRequest`: GeoParquet URL + columns
+- `VectorStacStatsRequest`: STAC URL + asset + columns
 
-Two mutually exclusive sources:
-- `ImageConfig`: Direct COG URL
-- `StacConfig`: STAC item URL (asset extracted in `zonal_stats.py:95-129`)
+**3. Raster Statistics (`zonal_stats.py`)**
 
-Both support:
-- `bands`: List of band indices (default: [1])
-- `approx_stats`: Use overviews for performance (default: false)
-
-**3. Statistics Calculation (`zonal_stats.py`)**
-
-`ZonalStatsService` orchestrates the calculation:
+`ZonalStatsService` orchestrates raster calculation:
 - **Geometry preparation:** Validates, transforms to raster CRS
-- **Overview selection:** Auto-selects overview level if `approx_stats=true` based on pixel count
+- **Overview selection:** Auto-selects overview level if `approx_stats=true`
 - **Band processing:** Reads data, handles nodata, applies scale/offset
 - **Stats computation:** Uses rasterstats library for standard stats
-- **Custom stats:** Area (square meters), frequency histogram
 
-**Validation limits:**
-- Max area: 1M km² (`MAX_AREA_KM2`)
-- Max pixels: 100M (`MAX_PIXELS`)
+**4. Vector Statistics (`zonal_vector.py`)**
 
-**4. Error Handling**
+`ZonalVectorService` uses DuckDB with spatial extension:
+- **Intersection mode auto-detection** (determined by geometry type in `endpoints.py`):
+  - Point with no radius or `radius=0`: `touch` mode (raw point, unweighted stats)
+  - Point with `radius > 0`: `intersect` mode (buffered to polygon, area-weighted)
+  - Polygon: `intersect` mode (area-weighted stats)
+- **CRS handling:** Reads CRS from GeoParquet metadata
+- **File format:** Only GeoParquet supported (HTTP 415 for other formats)
+
+**5. STAC Support (`stac.py`)**
+
+- `get_asset_url()`: Fetches STAC item and extracts asset href
+- `validate_vector_asset()`: Validates asset is GeoParquet
+
+**6. Error Handling**
 
 Custom exception hierarchy:
 - `ZonalStatsError` (base)
   - `GeometryError` (geometry validation)
-  - `RasterError` (raster I/O, processing)
+  - `RasterError` (raster I/O)
   - `STACError` (STAC fetching)
+  - `VectorError` (vector data operations)
+  - `UnsupportedMediaTypeError` (HTTP 415 for unsupported formats)
 
-All return appropriate HTTP status codes via exception handlers in `main.py`.
-
-**5. Statistics Types (`schemas.py:6-26`)**
+**7. Statistics Types (`schemas.py`)**
 
 Default: min, max, mean, count
 
 Optional: sum, std, median, majority, minority, unique, range, nodata
 
-Special: area (square meters), freq_hist (value frequency distribution)
+Special:
+- `aoi_area`: Area of the query AOI in square meters (always included)
+- `data_area`: Area of data within AOI (always included)
+- `freq_hist`: Value frequency histogram (raster only)
+- `density`: Features per km² of AOI (vector only)
 
-### Request/Response Flow
+### Example Requests
 
-1. POST `/api/v1/zonal-stats` with `ZonalStatsRequest`
-2. Validate geometry and ensure exactly one source (image or stac)
-3. If STAC: fetch item and extract asset URL
-4. `ZonalStatsService.calculate_stats()`:
-   - Prepare geometry (buffer points, validate polygons)
-   - Open raster, transform geometry to raster CRS
-   - Calculate window and select overview level
-   - For each band: read data, compute stats
-5. Return `ZonalStatsResponse`: `{"band_1": {...}, "band_2": {...}}`
+**Raster (COG):**
+```bash
+curl -X POST "http://localhost:8000/api/v1/zonal-stats/raster" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "aoi": {"type": "Polygon", "coordinates": [[[-0.16, 51.5], [-0.11, 51.5], [-0.11, 51.52], [-0.16, 51.52], [-0.16, 51.5]]]},
+    "url": "https://example.com/data.tif",
+    "bands": [1, 2],
+    "stats": ["min", "max", "mean", "std"]
+  }'
+```
 
-### Important Implementation Details
-
-- **CRS transformations:** Input geometries assumed to be WGS84 (EPSG:4326), transformed to raster CRS
-- **UTM zone calculation:** For point buffering, automatically selects UTM zone based on longitude
-- **Nodata handling:** Raster nodata values converted to NaN before statistics
-- **Scale/offset:** Automatically applied from raster metadata if present
-- **Small polygons:** Adjusted to ensure at least one pixel of data (`zonal_stats.py:445-461`)
-- **Area calculation:** Uses equal-area projection for accurate square meter measurements
+**Vector (GeoParquet):**
+```bash
+curl -X POST "http://localhost:8000/api/v1/zonal-stats/vector" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "aoi": {"type": "Polygon", "coordinates": [[[-0.16, 51.5], [-0.11, 51.5], [-0.11, 51.52], [-0.16, 51.52], [-0.16, 51.5]]]},
+    "url": "https://example.com/data.parquet",
+    "columns": ["population", "income"]
+  }'
+```
 
 ## API Documentation
 
@@ -181,7 +212,7 @@ When server is running:
 
 ## Dependencies
 
-**Core:** fastapi, uvicorn, pydantic, rasterio, rasterstats, shapely, numpy, pyproj
+**Core:** fastapi, uvicorn, pydantic, rasterio, rasterstats, duckdb, shapely, numpy, pyproj
 
 **AWS:** mangum (Lambda adapter)
 

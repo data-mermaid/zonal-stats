@@ -176,7 +176,14 @@ class ZonalVectorService:
         """Convert geometry to GeoJSON dict and Shapely shape."""
         try:
             if isinstance(geometry, PointGeometry):
-                geometry_dict = create_buffer_polygon(geometry)
+                if geometry.radius and geometry.radius > 0:
+                    geometry_dict = create_buffer_polygon(geometry)
+                else:
+                    # Raw point — no buffering
+                    geometry_dict = {
+                        "type": "Point",
+                        "coordinates": geometry.coordinates,
+                    }
             else:
                 geometry_dict = geometry.model_dump()
 

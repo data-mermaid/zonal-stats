@@ -27,7 +27,7 @@ POLYGON_GEOMETRY = {
 POINT_GEOMETRY = {
     "type": "Point",
     "coordinates": [-0.135, 51.51],
-    "buffer_size": 1000,
+    "radius": 1000,
 }
 
 
@@ -175,12 +175,31 @@ def test_raster_stats_empty_stats_list():
     assert any("Statistics list cannot be empty" in str(err) for err in error_detail)
 
 
+def test_raster_stats_point_without_radius():
+    """Test that Point without radius returns 400 for raster endpoints."""
+    point_no_radius = {
+        "type": "Point",
+        "coordinates": [-0.135, 51.51],
+    }
+
+    response = client.post(
+        "/api/v1/zonal-stats/raster",
+        json={
+            "aoi": point_no_radius,
+            "url": f"file://{os.path.abspath(RASTER_PATH)}",
+            "bands": [1],
+        },
+    )
+    assert response.status_code == 400
+    assert "radius" in response.json()["detail"].lower()
+
+
 def test_raster_stats_invalid_point_coordinates():
     """Test error handling for invalid point coordinates."""
     invalid_point = {
         "type": "Point",
         "coordinates": [200, 100],  # Invalid coordinates
-        "buffer_size": 1000,
+        "radius": 1000,
     }
 
     response = client.post(
@@ -198,12 +217,12 @@ def test_raster_stats_invalid_point_coordinates():
     )
 
 
-def test_raster_stats_invalid_buffer_size():
-    """Test error handling for invalid buffer size."""
+def test_raster_stats_invalid_radius():
+    """Test error handling for negative radius."""
     invalid_point = {
         "type": "Point",
         "coordinates": [-0.135, 51.51],
-        "buffer_size": -1000,
+        "radius": -1000,
     }
 
     response = client.post(
@@ -216,7 +235,7 @@ def test_raster_stats_invalid_buffer_size():
     )
     assert response.status_code == 422
     error_detail = response.json()["detail"]
-    assert any("Buffer size must be greater than 0" in str(err) for err in error_detail)
+    assert any("Radius must be non-negative" in str(err) for err in error_detail)
 
 
 def test_raster_stats_invalid_geometry():

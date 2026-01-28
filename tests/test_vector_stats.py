@@ -25,11 +25,11 @@ POLYGON_GEOMETRY = {
     ],
 }
 
-# Point in central London with buffer
+# Point in central London with radius
 POINT_GEOMETRY = {
     "type": "Point",
     "coordinates": [-0.135, 51.51],
-    "buffer_size": 2000,  # 2km buffer
+    "radius": 2000,  # 2km radius
 }
 
 # Geometry that doesn't intersect with test data

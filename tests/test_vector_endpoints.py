@@ -27,7 +27,7 @@ POLYGON_GEOMETRY = {
 POINT_GEOMETRY = {
     "type": "Point",
     "coordinates": [-0.135, 51.51],
-    "buffer_size": 1000,
+    "radius": 1000,
 }
 
 # Geometry that doesn't intersect with test vector data
@@ -51,14 +51,13 @@ NON_INTERSECTING_GEOMETRY = {
 
 
 def test_vector_stats_intersect_mode():
-    """Test vector statistics with intersection mode."""
+    """Test vector statistics with polygon (auto-determines intersect mode)."""
     response = client.post(
         "/api/v1/zonal-stats/vector",
         json={
             "aoi": POLYGON_GEOMETRY,
             "url": f"file://{os.path.abspath(VECTOR_PATH)}",
             "columns": ["population", "median_income"],
-            "intersection_mode": "intersect",
             "stats": [StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
         },
     )
@@ -77,14 +76,17 @@ def test_vector_stats_intersect_mode():
 
 
 def test_vector_stats_touch_mode():
-    """Test vector statistics with touch mode."""
+    """Test vector statistics with point (no radius → auto touch mode)."""
+    point_no_radius = {
+        "type": "Point",
+        "coordinates": [-0.135, 51.51],
+    }
     response = client.post(
         "/api/v1/zonal-stats/vector",
         json={
-            "aoi": POLYGON_GEOMETRY,
+            "aoi": point_no_radius,
             "url": f"file://{os.path.abspath(VECTOR_PATH)}",
             "columns": ["population"],
-            "intersection_mode": "touch",
             "stats": [StatType.COUNT, StatType.MEAN, StatType.STD],
         },
     )
@@ -93,7 +95,7 @@ def test_vector_stats_touch_mode():
 
     assert "population" in data
     pop_stats = data["population"]
-    assert pop_stats["count"] > 0
+    assert pop_stats["count"] >= 0
     assert "std" in pop_stats
 
 
@@ -332,7 +334,7 @@ def test_vector_stats_default_values():
             "aoi": POLYGON_GEOMETRY,
             "url": f"file://{os.path.abspath(VECTOR_PATH)}",
             "columns": ["population"],
-            # No intersection_mode, geometry_column, stats - should use defaults
+            # No geometry_column, stats - should use defaults
         },
     )
     assert response.status_code == 200

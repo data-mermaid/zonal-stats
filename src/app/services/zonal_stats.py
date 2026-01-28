@@ -101,10 +101,10 @@ def create_buffer_polygon(point: PointGeometry) -> dict:
         utm_point = transform(wgs84_to_utm.transform, point_geom)
 
         # Create buffer in UTM coordinates (meters)
-        if point.buffer_size <= 0:
-            raise GeometryError("Buffer size must be greater than 0")
+        if not point.radius or point.radius <= 0:
+            raise GeometryError("Radius must be greater than 0")
 
-        buffered = utm_point.buffer(point.buffer_size)
+        buffered = utm_point.buffer(point.radius)
 
         # Transform back to WGS84
         wgs84_polygon = transform(utm_to_wgs84.transform, buffered)

@@ -64,7 +64,7 @@ collection:
         			"pop_count"
             ],
             "geometry_column": "geom",
-            "intersection_mode": "intersect",
+
             "approx_stats": false
         }
     headers:
@@ -111,7 +111,7 @@ collection:
         			"pop_count"
         		],
         		"geometry_column": "geom",
-        		"intersection_mode": "intersect",
+
         		"approx_stats": false
         }
     headers:
@@ -181,7 +181,7 @@ collection:
         			"pop_count"
             ],
             "geometry_column": "geom",
-            "intersection_mode": "intersect",
+
             "approx_stats": false
         }
     headers:
@@ -260,7 +260,7 @@ collection:
           "aoi": {
             "type": "Point",
             "coordinates": [-78.5224, 24.1332],
-            "buffer_size": 0.01
+            "radius": 0.01
           },
           "url": "https://example.com/path/to/cog.tif",
           "stats": ["mean", "sum", "std"],
@@ -360,7 +360,6 @@ collection:
           "columns": ["score", "pop_count"],
           "stats": ["mean", "sum"],
           "geometry_column": "geometry",
-          "intersection_mode": "intersect",
           "approx_stats": false
         }
     headers:

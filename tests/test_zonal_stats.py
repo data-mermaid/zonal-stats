@@ -42,15 +42,15 @@ def test_zonal_stats_central_london():
     assert band_stats.max == 6
 
 
-def test_point_geometry_with_buffer():
-    """Test zonal statistics calculation for a point with buffer."""
+def test_point_geometry_with_radius():
+    """Test zonal statistics calculation for a point with radius."""
     raster_path = os.path.join(
         "tests", "data", "random_centrallondon_raster_cog_001.tif"
     )
     point = {
         "type": "Point",
         "coordinates": [-0.135, 51.51],  # Central point in our test area
-        "buffer_size": 1000,  # 1km buffer
+        "radius": 1000,  # 1km radius
     }
 
     service = ZonalStatsService(url=raster_path, bands=[1], approx_stats=False)
@@ -72,24 +72,24 @@ def test_invalid_point_coordinates():
         PointGeometry(
             type="Point",
             coordinates=[200, 51.5],  # Invalid longitude
-            buffer_size=1000,
+            radius=1000,
         )
 
     with pytest.raises(ValueError):
         PointGeometry(
             type="Point",
             coordinates=[-0.135, 100],  # Invalid latitude
-            buffer_size=1000,
+            radius=1000,
         )
 
 
-def test_invalid_buffer_size():
-    """Test validation of invalid buffer size."""
+def test_invalid_radius():
+    """Test validation of negative radius."""
     with pytest.raises(ValueError):
         PointGeometry(
             type="Point",
             coordinates=[-0.135, 51.5],
-            buffer_size=-1000,  # Negative buffer size
+            radius=-1000,  # Negative radius
         )
 
 

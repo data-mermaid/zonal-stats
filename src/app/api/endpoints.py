@@ -5,6 +5,8 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from ..models.schemas import (
+    PointGeometry,
+    PolygonGeometry,
     RasterStacStatsRequest,
     RasterStatsRequest,
     VectorStacStatsRequest,
@@ -36,6 +38,20 @@ raster_router = APIRouter(prefix="/raster", tags=["Raster"])
 vector_router = APIRouter(prefix="/vector", tags=["Vector"])
 
 
+def _determine_intersection_mode(aoi: PointGeometry | PolygonGeometry) -> str:
+    """Determine intersection mode from geometry type.
+
+    - Point with no radius or radius=0: touch (raw point, unweighted)
+    - Point with radius > 0: intersect (buffered to polygon, area-weighted)
+    - Polygon: intersect (area-weighted)
+    """
+    if isinstance(aoi, PointGeometry):
+        if not aoi.radius or aoi.radius <= 0:
+            return "touch"
+        return "intersect"
+    return "intersect"
+
+
 def _handle_service_error(e: Exception):
     """Convert service exceptions to HTTP exceptions."""
     if isinstance(e, RasterError | GeometryError | STACError | VectorError):
@@ -62,6 +78,14 @@ def _handle_service_error(e: Exception):
 )
 async def raster_stats(request: RasterStatsRequest) -> ZonalStatsResponse:
     """Calculate zonal statistics from a direct COG URL."""
+    if isinstance(request.aoi, PointGeometry) and (
+        not request.aoi.radius or request.aoi.radius <= 0
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Point geometry requires radius > 0 for raster statistics",
+        )
+
     if not ZonalStatsService.validate_geometry(request.aoi):
         raise HTTPException(status_code=400, detail="Invalid geometry provided")
 
@@ -87,6 +111,14 @@ async def raster_stats(request: RasterStatsRequest) -> ZonalStatsResponse:
 )
 async def raster_stac_stats(request: RasterStacStatsRequest) -> ZonalStatsResponse:
     """Calculate zonal statistics from a STAC item's raster asset."""
+    if isinstance(request.aoi, PointGeometry) and (
+        not request.aoi.radius or request.aoi.radius <= 0
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Point geometry requires radius > 0 for raster statistics",
+        )
+
     if not ZonalStatsService.validate_geometry(request.aoi):
         raise HTTPException(status_code=400, detail="Invalid geometry provided")
 
@@ -125,9 +157,10 @@ async def vector_stats(request: VectorStatsRequest) -> ZonalStatsResponse:
         raise HTTPException(status_code=400, detail="Invalid geometry provided")
 
     try:
+        intersection_mode = _determine_intersection_mode(request.aoi)
         logger.info(
             f"Processing vector: {request.url}, columns: {request.columns}, "
-            f"mode: {request.intersection_mode}"
+            f"mode: {intersection_mode}"
         )
 
         stats = filter_vector_stats(request.stats)
@@ -136,7 +169,7 @@ async def vector_stats(request: VectorStatsRequest) -> ZonalStatsResponse:
             url=request.url,
             columns=request.columns,
             geometry_column=request.geometry_column,
-            intersection_mode=request.intersection_mode,
+            intersection_mode=intersection_mode,
             approx_stats=request.approx_stats,
         )
         return service.calculate_stats(request.aoi, stats)
@@ -157,6 +190,7 @@ async def vector_stac_stats(request: VectorStacStatsRequest) -> ZonalStatsRespon
         raise HTTPException(status_code=400, detail="Invalid geometry provided")
 
     try:
+        intersection_mode = _determine_intersection_mode(request.aoi)
         logger.info(f"Processing STAC vector: {request.url}, asset: {request.asset}")
 
         # Fetch STAC item and validate it's a GeoParquet asset
@@ -167,7 +201,7 @@ async def vector_stac_stats(request: VectorStacStatsRequest) -> ZonalStatsRespon
             url=parquet_url,
             columns=request.columns,
             geometry_column=request.geometry_column,
-            intersection_mode=request.intersection_mode,
+            intersection_mode=intersection_mode,
             approx_stats=request.approx_stats,
         )
         return service.calculate_stats(request.aoi, stats)
