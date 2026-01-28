@@ -433,11 +433,150 @@ class ZonalStatsService:
                 raise
             raise ZonalStatsError(f"Error processing band statistics: {str(e)}") from e
 
+    def _sample_point(
+        self,
+        geometry: PointGeometry,
+        stats: list[StatType] | None,
+    ) -> dict[str, BandStats]:
+        """Sample the single pixel under a point (no radius) for each band."""
+        try:
+            lon, lat = geometry.coordinates
+
+            # Process stats list
+            base_stats = (
+                stats
+                if stats is not None
+                else [StatType.MIN, StatType.MAX, StatType.MEAN, StatType.COUNT]
+            )
+            stats_to_use = self._ensure_area_stats(base_stats)
+
+            try:
+                src = rasterio.open(self.url)
+            except Exception as e:
+                raise RasterError(f"Error opening raster file: {str(e)}") from e
+
+            try:
+                src_crs = src.crs
+                if src_crs is None:
+                    raise RasterError("Source raster has no CRS defined")
+
+                # Transform point to raster CRS
+                if src_crs != CRS.from_epsg(4326):
+                    transformer = Transformer.from_crs(
+                        "EPSG:4326", src_crs, always_xy=True
+                    )
+                    x, y = transformer.transform(lon, lat)
+                else:
+                    x, y = lon, lat
+
+                # Get pixel row/col
+                row, col = src.index(x, y)
+
+                # Check bounds
+                if row < 0 or row >= src.height or col < 0 or col >= src.width:
+                    raise GeometryError(
+                        "Point is outside the raster extent"
+                    )
+
+                # Calculate pixel area in m²
+                pixel_width = abs(src.transform.a)
+                pixel_height = abs(src.transform.e)
+                if src_crs.is_geographic:
+                    center_lat = lat
+                    meters_per_degree_lon = 111320 * math.cos(
+                        math.radians(center_lat)
+                    )
+                    meters_per_degree_lat = 110540
+                    pixel_area_m2 = (
+                        pixel_width * meters_per_degree_lon
+                        * pixel_height * meters_per_degree_lat
+                    )
+                else:
+                    pixel_area_m2 = pixel_width * pixel_height
+
+                window = rasterio.windows.Window(col, row, 1, 1)
+
+                results = {}
+                for band_idx in self.bands:
+                    if band_idx not in src.indexes:
+                        raise RasterError(f"Band {band_idx} not found in raster")
+
+                    data = src.read(band_idx, window=window).astype(np.float32)
+                    value = data[0, 0]
+
+                    # Handle nodata
+                    is_nodata = False
+                    if src.nodata is not None and value == src.nodata:
+                        is_nodata = True
+
+                    # Apply scale/offset
+                    if not is_nodata:
+                        scales = src.scales
+                        offsets = src.offsets
+                        if scales is not None and len(scales) >= band_idx:
+                            scale = scales[band_idx - 1]
+                            if scale != 1.0:
+                                value = value * scale
+                        if offsets is not None and len(offsets) >= band_idx:
+                            offset = offsets[band_idx - 1]
+                            if offset != 0.0:
+                                value = value + offset
+
+                    # Build stats dict
+                    stats_dict = {}
+                    pixel_value = None if is_nodata else float(value)
+
+                    for stat in stats_to_use:
+                        if stat == StatType.AOI_AREA:
+                            stats_dict["aoi_area"] = 0.0
+                        elif stat == StatType.DATA_AREA:
+                            stats_dict["data_area"] = (
+                                0.0 if is_nodata else pixel_area_m2
+                            )
+                        elif stat == StatType.FREQ_HIST:
+                            stats_dict["freq_hist"] = (
+                                {} if is_nodata else {pixel_value: 1}
+                            )
+                        elif stat == StatType.COUNT:
+                            stats_dict["count"] = 0 if is_nodata else 1
+                        elif stat == StatType.NODATA:
+                            stats_dict["nodata"] = 1 if is_nodata else 0
+                        elif stat == StatType.STD:
+                            stats_dict["std"] = None if is_nodata else 0.0
+                        elif stat == StatType.UNIQUE:
+                            stats_dict["unique"] = (
+                                [] if is_nodata else [pixel_value]
+                            )
+                        elif stat == StatType.RANGE:
+                            stats_dict["range"] = None if is_nodata else 0.0
+                        else:
+                            # min, max, mean, sum, median, majority, minority
+                            stats_dict[stat.value] = pixel_value
+
+                    band_stats = self._process_band_stats(stats_dict, stats_to_use)
+                    results[f"band_{band_idx}"] = band_stats
+
+                return results
+            finally:
+                src.close()
+        except Exception as e:
+            if isinstance(e, ZonalStatsError):
+                raise
+            raise ZonalStatsError(
+                f"Error sampling point: {str(e)}"
+            ) from e
+
     def calculate_stats(
         self, geometry: PointGeometry | PolygonGeometry, stats: list[StatType] | None
     ) -> dict[str, BandStats]:
         """Calculate zonal statistics for the given geometry and bands."""
         try:
+            # Point without radius: sample single pixel directly
+            if isinstance(geometry, PointGeometry) and (
+                not geometry.radius or geometry.radius <= 0
+            ):
+                return self._sample_point(geometry, stats)
+
             # Prepare geometry
             geometry_dict, shapely_geom = self._prepare_geometry(geometry)
 

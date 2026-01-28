@@ -78,14 +78,6 @@ def _handle_service_error(e: Exception):
 )
 async def raster_stats(request: RasterStatsRequest) -> ZonalStatsResponse:
     """Calculate zonal statistics from a direct COG URL."""
-    if isinstance(request.aoi, PointGeometry) and (
-        not request.aoi.radius or request.aoi.radius <= 0
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Point geometry requires radius > 0 for raster statistics",
-        )
-
     if not ZonalStatsService.validate_geometry(request.aoi):
         raise HTTPException(status_code=400, detail="Invalid geometry provided")
 
@@ -111,14 +103,6 @@ async def raster_stats(request: RasterStatsRequest) -> ZonalStatsResponse:
 )
 async def raster_stac_stats(request: RasterStacStatsRequest) -> ZonalStatsResponse:
     """Calculate zonal statistics from a STAC item's raster asset."""
-    if isinstance(request.aoi, PointGeometry) and (
-        not request.aoi.radius or request.aoi.radius <= 0
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Point geometry requires radius > 0 for raster statistics",
-        )
-
     if not ZonalStatsService.validate_geometry(request.aoi):
         raise HTTPException(status_code=400, detail="Invalid geometry provided")
 

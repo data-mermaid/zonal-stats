@@ -93,6 +93,41 @@ def test_invalid_radius():
         )
 
 
+def test_point_without_radius():
+    """Test single-pixel sampling for a point without radius."""
+    raster_path = os.path.join(
+        "tests", "data", "random_centrallondon_raster_cog_001.tif"
+    )
+    point = {
+        "type": "Point",
+        "coordinates": [-0.135, 51.51],
+    }
+
+    service = ZonalStatsService(url=raster_path, bands=[1], approx_stats=False)
+
+    results = service.calculate_stats(
+        geometry=PointGeometry(**point),
+        stats=[
+            StatType.COUNT,
+            StatType.MEAN,
+            StatType.MIN,
+            StatType.MAX,
+            StatType.STD,
+        ],
+    )
+
+    assert "band_1" in results
+    band_stats = results["band_1"]
+    # Single pixel: count is 0 or 1
+    assert band_stats.count in (0, 1)
+    if band_stats.count == 1:
+        # For a single pixel, min == max == mean
+        assert band_stats.min == band_stats.max
+        assert band_stats.min == band_stats.mean
+        assert band_stats.std == 0.0
+    assert band_stats.aoi_area == 0.0
+
+
 def test_all_stat_types():
     """Test calculation of all available statistics."""
     raster_path = os.path.join(

@@ -176,10 +176,11 @@ def test_raster_stats_empty_stats_list():
 
 
 def test_raster_stats_point_without_radius():
-    """Test that Point without radius returns 400 for raster endpoints."""
+    """Test that Point without radius samples a single pixel."""
+    # Use a coordinate that lands on a valid pixel (row=4, col=4, value=6)
     point_no_radius = {
         "type": "Point",
-        "coordinates": [-0.135, 51.51],
+        "coordinates": [-0.133, 51.5165],
     }
 
     response = client.post(
@@ -188,10 +189,46 @@ def test_raster_stats_point_without_radius():
             "aoi": point_no_radius,
             "url": f"file://{os.path.abspath(RASTER_PATH)}",
             "bands": [1],
+            "stats": [StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
         },
     )
-    assert response.status_code == 400
-    assert "radius" in response.json()["detail"].lower()
+    assert response.status_code == 200
+    data = response.json()
+    assert "band_1" in data
+    band_stats = data["band_1"]
+    # Single pixel: count is 1, min == max == mean
+    assert band_stats["count"] == 1
+    assert band_stats["min"] == band_stats["max"]
+    assert band_stats["min"] == band_stats["mean"]
+    assert band_stats["min"] == 6.0
+    assert band_stats["aoi_area"] == 0.0
+    assert band_stats["data_area"] > 0
+
+
+def test_raster_stats_point_without_radius_nodata():
+    """Test point sampling on a nodata pixel returns count=0."""
+    # This coordinate lands on a nodata pixel
+    point_nodata = {
+        "type": "Point",
+        "coordinates": [-0.135, 51.51],
+    }
+
+    response = client.post(
+        "/api/v1/zonal-stats/raster",
+        json={
+            "aoi": point_nodata,
+            "url": f"file://{os.path.abspath(RASTER_PATH)}",
+            "bands": [1],
+            "stats": [StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "band_1" in data
+    band_stats = data["band_1"]
+    assert band_stats["count"] == 0
+    assert band_stats["aoi_area"] == 0.0
+    assert band_stats["data_area"] == 0.0
 
 
 def test_raster_stats_invalid_point_coordinates():
