@@ -176,6 +176,42 @@ Once the server is running, you can access:
 - Swagger UI documentation at `/docs`
 - ReDoc documentation at `/redoc`
 
+## User Documentation (MkDocs)
+
+The project includes a comprehensive documentation site built with MkDocs Material.
+
+### Serve Locally
+
+```bash
+# Install dependencies (if not already done)
+uv sync
+
+# Start local development server with hot reload
+uv run mkdocs serve
+```
+
+The documentation will be available at `http://localhost:8000`.
+
+### Build
+
+```bash
+# Build static site to the 'site/' directory
+uv run mkdocs build
+
+# Build with strict mode (fails on warnings)
+uv run mkdocs build --strict
+```
+
+### Deploy to GitHub Pages
+
+The documentation is automatically deployed to GitHub Pages when changes are pushed to the `main` branch (via the `.github/workflows/docs.yml` workflow).
+
+To manually deploy:
+
+```bash
+uv run mkdocs gh-deploy --force
+```
+
 ## License
 
 MIT

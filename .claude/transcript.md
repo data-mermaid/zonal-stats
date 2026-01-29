@@ -319,3 +319,16 @@ All 66 tests pass. Ruff checks pass.
 - **.github/workflows/docs.yml**: GitHub Pages deployment workflow
 
 Verified: `mkdocs build --strict` passes with no errors.
+
+---
+
+### Prompt: Update README with MkDocs instructions
+
+**Request:** Update the README to document how to build, serve locally, and deploy the MkDocs documentation.
+
+**Changes made:**
+- **README.md**: Added "User Documentation (MkDocs)" section with:
+  - Serve Locally: `uv run mkdocs serve` for development with hot reload
+  - Build: `uv run mkdocs build` and `--strict` mode
+  - Deploy: Note about automatic GitHub Pages deployment via workflow, plus manual `uv run mkdocs gh-deploy --force` command
+
