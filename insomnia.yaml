@@ -1,4 +1,5 @@
 type: collection.insomnia.rest/5.0
+schema_version: "5.1"
 name: Zonal API
 meta:
   id: wrk_89631c502d7a47478e14d9d5b0fa5c9d
@@ -9,9 +10,9 @@ collection:
   - url: "{{ _.api_url }}/api/v1/zonal-stats/vector"
     name: Zonal Stats - Polygon
     meta:
-      id: req_bc29b2ac2d5b4c0cba82105bc4c180e5
+      id: req_9d8ebf24e17d4acca49e2e26c1f4f7a6
       created: 1769118115467
-      modified: 1769202175313
+      modified: 1769702669500
       isPrivate: false
       description: ""
       sortKey: -1769118115467
@@ -56,7 +57,9 @@ collection:
                 ]
               },
           "stats": [
-            "mean"
+            "mean",
+        		"count",
+        		"max"
           ],
             "url": "https://d2uu99zl9amnvy.cloudfront.net/assets/10da4b11-c79f-4ce7-b359-0d4710a1f0fd/c38923d6-997b-424f-87f5-2b1759af2532/data_human_pressures.parquet",
             "columns": [
@@ -81,11 +84,11 @@ collection:
         store: true
       rebuildPath: true
   - url: "{{ _.api_url }}/api/v1/zonal-stats/vector"
-    name: Zonal Stats - Touches
+    name: Zonal Stats - Point
     meta:
-      id: req_b80a38569ede4e64a5c5ec17990776c5
+      id: req_fb6d65a6e2f54ad2bbc816f71aae0902
       created: 1769118887295
-      modified: 1769202198963
+      modified: 1769633660572
       isPrivate: false
       description: ""
       sortKey: -1762995867771.5
@@ -96,7 +99,6 @@ collection:
         {
         	"aoi": {
         		"type": "Point",
-        		"radius": 0,
         		"coordinates": [
         			-78.5224,
         			24.1332
@@ -130,7 +132,7 @@ collection:
   - url: "{{ _.api_url }}/api/v1/zonal-stats/vector"
     name: Zonal Stats - Polygon Overlaps
     meta:
-      id: req_dd87e11896f44e2489ceb281ac3f3590
+      id: req_24781652e12c467f938637ccdbfb6906
       created: 1769119011402
       modified: 1769203861263
       isPrivate: false
@@ -200,11 +202,11 @@ collection:
   - url: "{{ _.api_url }}/api/v1/zonal-stats/raster"
     name: Raster Stats - COG Polygon
     meta:
-      id: req_raster_cog_polygon
+      id: req_0d8cec34a59a468e9cf546c853d5590a
       created: 1769203861263
-      modified: 1769203861263
+      modified: 1769702712888
       isPrivate: false
-      description: "Calculate zonal statistics from a Cloud Optimized GeoTIFF"
+      description: Calculate zonal statistics from a Cloud Optimized GeoTIFF
       sortKey: -1769203861263
     method: POST
     body:
@@ -212,21 +214,50 @@ collection:
       text: >-
         {
           "aoi": {
-            "type": "Polygon",
-            "coordinates": [
-              [
-                [-78.520342461558826, 24.238269230532779],
-                [-78.511127176691531, 24.273813900735167],
-                [-78.484797791356428, 24.275130370001921],
-                [-78.471633098688883, 24.251433923200331],
-                [-78.474266037222392, 24.231686884199004],
-                [-78.494013076223723, 24.229053945665495],
-                [-78.520342461558826, 24.238269230532779]
-              ]
-            ]
-          },
-          "url": "https://example.com/path/to/cog.tif",
-          "stats": ["mean", "min", "max", "count"],
+                "coordinates": [
+                  [
+                    [
+                      -113.7333696674792,
+                      50.99440621984661
+                    ],
+                    [
+                      -113.64161917955383,
+                      50.953542510508385
+                    ],
+                    [
+                      -113.57672249297237,
+                      50.95636185178796
+                    ],
+                    [
+                      -113.55881995874311,
+                      50.89147372175043
+                    ],
+                    [
+                      -113.39545933390042,
+                      50.90699868215913
+                    ],
+                    [
+                      -113.39098370034328,
+                      50.99440621984661
+                    ],
+                    [
+                      -113.473782921154,
+                      51.07321372032368
+                    ],
+                    [
+                      -113.72441840036421,
+                      51.07461977927238
+                    ],
+                    [
+                      -113.7333696674792,
+                      50.99440621984661
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+          "url": "https://d2uu99zl9amnvy.cloudfront.net/assets/ea07abba-06cf-41a8-92a3-b20eaf801ea9/ca6d3bc9-65c1-4b14-9635-c1efc215b216/data_lulc_2020.tif",
+          "stats": ["mean", "min", "max", "count","sum"],
           "bands": [1],
           "approx_stats": false
         }
@@ -246,11 +277,11 @@ collection:
   - url: "{{ _.api_url }}/api/v1/zonal-stats/raster"
     name: Raster Stats - COG Point Buffer
     meta:
-      id: req_raster_cog_point
+      id: req_386a26513c6a4122899e2d34f62f02d4
       created: 1769203861264
-      modified: 1769203861264
+      modified: 1769634935611
       isPrivate: false
-      description: "Calculate zonal statistics from COG using a point with buffer"
+      description: Calculate zonal statistics from COG using a point with buffer
       sortKey: -1769203861264
     method: POST
     body:
@@ -259,12 +290,12 @@ collection:
         {
           "aoi": {
             "type": "Point",
-            "coordinates": [-78.5224, 24.1332],
+            "coordinates": [-111.428394, 48.176078],
             "radius": 0.01
           },
-          "url": "https://example.com/path/to/cog.tif",
+          "url": "https://d2uu99zl9amnvy.cloudfront.net/assets/ea07abba-06cf-41a8-92a3-b20eaf801ea9/ca6d3bc9-65c1-4b14-9635-c1efc215b216/data_lulc_2020.tif",
           "stats": ["mean", "sum", "std"],
-          "bands": [1, 2],
+          "bands": [1],
           "approx_stats": false
         }
     headers:
@@ -283,11 +314,11 @@ collection:
   - url: "{{ _.api_url }}/api/v1/zonal-stats/raster/stac"
     name: Raster Stats - STAC Item
     meta:
-      id: req_raster_stac
+      id: req_72a0f53ac60d4c4eb91f8dfc2282907f
       created: 1769203861265
-      modified: 1769203861265
+      modified: 1769633544033
       isPrivate: false
-      description: "Calculate zonal statistics from a STAC item raster asset"
+      description: Calculate zonal statistics from a STAC item raster asset
       sortKey: -1769203861265
     method: POST
     body:
@@ -308,7 +339,7 @@ collection:
               ]
             ]
           },
-          "url": "https://example.com/stac/item.json",
+          "url": "https://mermaid.prescient.earth/stac/collections/ea07abba-06cf-41a8-92a3-b20eaf801ea9/items/ca6d3bc9-65c1-4b14-9635-c1efc215b216",
           "asset": "data",
           "stats": ["mean", "min", "max"],
           "bands": [1],
@@ -330,11 +361,11 @@ collection:
   - url: "{{ _.api_url }}/api/v1/zonal-stats/vector/stac"
     name: Vector Stats - STAC Item
     meta:
-      id: req_vector_stac
+      id: req_2f150861fa344ecbab1c303857a1ac7c
       created: 1769203861266
-      modified: 1769203861266
+      modified: 1769633476345
       isPrivate: false
-      description: "Calculate zonal statistics from a STAC item GeoParquet asset"
+      description: Calculate zonal statistics from a STAC item GeoParquet asset
       sortKey: -1769203861266
     method: POST
     body:
@@ -355,7 +386,7 @@ collection:
               ]
             ]
           },
-          "url": "https://example.com/stac/item.json",
+          "url": "https://mermaid.prescient.earth/stac/collections/10da4b11-c79f-4ce7-b359-0d4710a1f0fd/items/c38923d6-997b-424f-87f5-2b1759af2532",
           "asset": "data",
           "columns": ["score", "pop_count"],
           "stats": ["mean", "sum"],
@@ -378,14 +409,50 @@ collection:
   - url: "{{ _.api_url }}/"
     name: Root - API Info
     meta:
-      id: req_root
+      id: req_d53b33b3bd924353b9660c301be25799
       created: 1769203861267
       modified: 1769203861267
       isPrivate: false
-      description: "Get API information and available endpoints"
+      description: Get API information and available endpoints
       sortKey: -1769203861267
     method: GET
     headers:
+      - name: User-Agent
+        value: insomnia/12.0.0
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - url: "{{ _.api_url }}/api/v1/zonal-stats/raster"
+    name: Raster Stats - COG Point
+    meta:
+      id: req_a1d47defbd304af580f0ac0cdadb35db
+      created: 1769634829699
+      modified: 1769634940712
+      isPrivate: false
+      description: Calculate zonal statistics from COG using a point with buffer
+      sortKey: -1769203861263.5
+    method: POST
+    body:
+      mimeType: application/json
+      text: >-
+        {
+          "aoi": {
+            "type": "Point",
+            "coordinates": [-111.428394, 48.176078]
+          },
+          "url": "https://d2uu99zl9amnvy.cloudfront.net/assets/ea07abba-06cf-41a8-92a3-b20eaf801ea9/ca6d3bc9-65c1-4b14-9635-c1efc215b216/data_lulc_2020.tif",
+          "stats": ["mean", "sum", "std"],
+          "bands": [1],
+          "approx_stats": false
+        }
+    headers:
+      - name: Content-Type
+        value: application/json
       - name: User-Agent
         value: insomnia/12.0.0
     settings:
