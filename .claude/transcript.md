@@ -332,3 +332,22 @@ Verified: `mkdocs build --strict` passes with no errors.
   - Build: `uv run mkdocs build` and `--strict` mode
   - Deploy: Note about automatic GitHub Pages deployment via workflow, plus manual `uv run mkdocs gh-deploy --force` command
 
+---
+
+### Prompt: Investigate API vs QGIS zonal stats differences
+
+**Issue:** User reported small differences between QGIS and API results for the same AOI and raster:
+- QGIS: count=21,245,799, sum=66,363,748, mean=3.1236174
+- API: count=21,246,960, sum=66,371,644, mean=3.123818
+
+**Investigation:**
+1. Created `test.sh` to compare GDAL gdalwarp vs rasterstats rasterization
+2. Found that **GDAL matches QGIS exactly** (QGIS uses GDAL internally)
+3. rasterstats uses `rasterio.features.rasterize()` which includes ~9,700 more edge pixels
+4. After filtering nodata, this results in 1,161 extra pixels (~0.005% difference)
+5. The rasterstats mask is a **superset** of the GDAL mask - same center pixels plus additional edge pixels
+6. Transform origins are identical (diff of 10⁻¹⁴ degrees), so it's the rasterization algorithm, not grid alignment
+
+**Changes made:**
+- **docs/gotchas.md**: Added gotcha #13 explaining why API results may differ slightly from QGIS/GDAL, with comparison table and workaround using gdalwarp directly
+

@@ -37,3 +37,23 @@ If your AOI exceeds 1M km&sup2; or 100M pixels, the request fails with a 400 unl
 
 **12. Vector `mean` is area-weighted in `intersect` mode**
 For polygon or buffered-point queries, `mean` is weighted by the intersection area ratio, not a simple average. This is intentional -- a feature half-inside your AOI contributes half its value.
+
+**13. Raster stats may differ slightly from QGIS/GDAL (~0.005%)**
+
+This API uses `rasterstats` with `rasterio.features.rasterize()` for polygon-to-pixel masking, while QGIS uses GDAL's `gdal_rasterize`. These implement the same conceptual rule (center-of-pixel) but differ slightly at polygon boundaries.
+
+In testing with the same AOI and raster:
+
+| Tool | Pixel Count | Difference |
+|------|-------------|------------|
+| QGIS / GDAL | 21,245,799 | baseline |
+| This API | 21,246,960 | +1,161 (+0.005%) |
+
+The rasterstats mask is a **superset** of the GDAL mask -- it includes all GDAL pixels plus a small number of additional edge pixels. This is due to floating-point handling differences in the rasterization algorithms, not grid alignment.
+
+For most use cases, this difference is negligible. If you need exact parity with QGIS, use GDAL directly:
+
+```bash
+gdalwarp -cutline aoi.geojson -crop_to_cutline -dstnodata 0 input.tif clipped.tif
+gdalinfo -stats clipped.tif
+```
