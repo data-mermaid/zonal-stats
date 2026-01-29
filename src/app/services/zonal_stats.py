@@ -682,7 +682,7 @@ class ZonalStatsService:
                             affine=window_transform,
                             stats=processed_stats,
                             nodata=np.nan,
-                            all_touched=True,
+                            all_touched=False,
                             raster_out=False,
                         )[0]
                         stats_dict.update(raster_stats_dict)
@@ -696,7 +696,7 @@ class ZonalStatsService:
                             affine=window_transform,
                             stats=["count"],
                             nodata=np.nan,
-                            all_touched=True,
+                            all_touched=False,
                             raster_out=False,
                         )[0]
                         valid_count = valid_pixel_stats.get("count", 0) or 0
