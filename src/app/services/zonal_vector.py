@@ -54,6 +54,17 @@ class ZonalVectorService:
         self._conn = None
 
     @staticmethod
+    def _quote_identifier(name: str) -> str:
+        """Quote a SQL identifier to prevent injection.
+
+        Uses DuckDB's double-quote identifier syntax and escapes any embedded
+        double quotes by doubling them.
+        """
+        # Escape embedded double quotes by doubling them
+        escaped = name.replace('"', '""')
+        return f'"{escaped}"'
+
+    @staticmethod
     def _validate_file_format(url: str) -> None:
         """Validate that the URL points to a GeoParquet file.
 
@@ -109,11 +120,14 @@ class ZonalVectorService:
         try:
             conn = self._get_connection()
             # Read CRS from GeoParquet file metadata (stored under 'geo' key)
-            result = conn.execute(f"""
+            result = conn.execute(
+                """
                 SELECT value
-                FROM parquet_kv_metadata('{self.url}')
+                FROM parquet_kv_metadata($1)
                 WHERE key = 'geo'
-            """).fetchone()
+            """,
+                [self.url],
+            ).fetchone()
 
             if result and result[0]:
                 geo_metadata = json.loads(result[0])
@@ -142,10 +156,13 @@ class ZonalVectorService:
             conn = self._get_connection()
 
             # Get column info from the parquet file
-            result = conn.execute(f"""
+            result = conn.execute(
+                """
                 SELECT column_name, column_type
-                FROM (DESCRIBE SELECT * FROM read_parquet('{self.url}'))
-            """).fetchall()
+                FROM (DESCRIBE SELECT * FROM read_parquet($1))
+            """,
+                [self.url],
+            ).fetchall()
 
             available_columns = {row[0]: row[1] for row in result}
 
@@ -311,22 +328,29 @@ class ZonalVectorService:
             # Ratio method: weight by proportion of feature inside AOI
             weight_expr = "intersection_area / NULLIF(feature_area, 0)"
 
+        # Quote geometry column identifier
+        geom_col = self._quote_identifier(self.geometry_column)
+
         for column in self.columns:
+            # Quote column identifier to prevent SQL injection
+            col = self._quote_identifier(column)
+
             # Build the query for weighted statistics
+            # Use parameter binding for url ($1) and wkt ($2)
             query = f"""
             WITH aoi AS (
-                SELECT ST_GeomFromText('{wkt}') AS geom
+                SELECT ST_GeomFromText($2) AS geom
             ),
             intersected AS (
                 SELECT
-                    t.{column} as value,
+                    t.{col} as value,
                     ST_Area(
-                        ST_Intersection(t.{self.geometry_column}, aoi.geom)
+                        ST_Intersection(t.{geom_col}, aoi.geom)
                     ) AS intersection_area,
-                    ST_Area(t.{self.geometry_column}) AS feature_area
-                FROM read_parquet('{self.url}') t, aoi
-                WHERE ST_Intersects(t.{self.geometry_column}, aoi.geom)
-                  AND t.{column} IS NOT NULL
+                    ST_Area(t.{geom_col}) AS feature_area
+                FROM read_parquet($1) t, aoi
+                WHERE ST_Intersects(t.{geom_col}, aoi.geom)
+                  AND t.{col} IS NOT NULL
             ),
             weighted AS (
                 SELECT
@@ -348,7 +372,7 @@ class ZonalVectorService:
             """
 
             try:
-                result = conn.execute(query).fetchone()
+                result = conn.execute(query, [self.url, wkt]).fetchone()
                 count, total_weight, weighted_sum, min_val, max_val, total_area = result
 
                 # Handle empty results
@@ -420,26 +444,33 @@ class ZonalVectorService:
         conn = self._get_connection()
         results = {}
 
+        # Quote geometry column identifier
+        geom_col = self._quote_identifier(self.geometry_column)
+
         for column in self.columns:
+            # Quote column identifier to prevent SQL injection
+            col = self._quote_identifier(column)
+
+            # Use parameter binding for url ($1) and wkt ($2)
             query = f"""
             WITH aoi AS (
-                SELECT ST_GeomFromText('{wkt}') AS geom
+                SELECT ST_GeomFromText($2) AS geom
             )
             SELECT
                 COUNT(*) AS count,
-                AVG({column}) AS mean,
-                MIN({column}) AS min_val,
-                MAX({column}) AS max_val,
-                SUM({column}) AS sum_val,
-                STDDEV({column}) AS std_val,
-                SUM(ST_Area(t.{self.geometry_column})) AS total_feature_area
-            FROM read_parquet('{self.url}') t, aoi
-            WHERE ST_Intersects(t.{self.geometry_column}, aoi.geom)
-              AND t.{column} IS NOT NULL
+                AVG({col}) AS mean,
+                MIN({col}) AS min_val,
+                MAX({col}) AS max_val,
+                SUM({col}) AS sum_val,
+                STDDEV({col}) AS std_val,
+                SUM(ST_Area(t.{geom_col})) AS total_feature_area
+            FROM read_parquet($1) t, aoi
+            WHERE ST_Intersects(t.{geom_col}, aoi.geom)
+              AND t.{col} IS NOT NULL
             """
 
             try:
-                result = conn.execute(query).fetchone()
+                result = conn.execute(query, [self.url, wkt]).fetchone()
                 count, mean, min_val, max_val, sum_val, std_val, total_area = result
 
                 # Handle empty results
@@ -499,29 +530,33 @@ class ZonalVectorService:
         """Calculate additional statistics (std, range) for intersection mode."""
         conn = self._get_connection()
 
+        # Quote identifiers to prevent SQL injection
+        col = self._quote_identifier(column)
+        geom_col = self._quote_identifier(self.geometry_column)
+
         if weighted:
             # Determine weight expression based on weighting method
             if self.weighting_method == WeightingMethod.AREA:
-                weight_expr = "ST_Area(ST_Intersection(t.{geom_col}, aoi.geom))"
+                weight_expr = f"ST_Area(ST_Intersection(t.{geom_col}, aoi.geom))"
             else:
                 weight_expr = (
-                    "ST_Area(ST_Intersection(t.{geom_col}, aoi.geom)) / "
-                    "NULLIF(ST_Area(t.{geom_col}), 0)"
+                    f"ST_Area(ST_Intersection(t.{geom_col}, aoi.geom)) / "
+                    f"NULLIF(ST_Area(t.{geom_col}), 0)"
                 )
-            weight_expr = weight_expr.format(geom_col=self.geometry_column)
 
             # For weighted std, we need a different approach
+            # Use parameter binding for url ($1) and wkt ($2)
             query = f"""
             WITH aoi AS (
-                SELECT ST_GeomFromText('{wkt}') AS geom
+                SELECT ST_GeomFromText($2) AS geom
             ),
             intersected AS (
                 SELECT
-                    t.{column} as value,
+                    t.{col} as value,
                     {weight_expr} AS weight
-                FROM read_parquet('{self.url}') t, aoi
-                WHERE ST_Intersects(t.{self.geometry_column}, aoi.geom)
-                  AND t.{column} IS NOT NULL
+                FROM read_parquet($1) t, aoi
+                WHERE ST_Intersects(t.{geom_col}, aoi.geom)
+                  AND t.{col} IS NOT NULL
             ),
             weighted_stats AS (
                 SELECT
@@ -538,20 +573,21 @@ class ZonalVectorService:
             FROM intersected, weighted_stats
             """
         else:
+            # Use parameter binding for url ($1) and wkt ($2)
             query = f"""
             WITH aoi AS (
-                SELECT ST_GeomFromText('{wkt}') AS geom
+                SELECT ST_GeomFromText($2) AS geom
             )
             SELECT
-                STDDEV({column}) AS std_val,
-                MAX({column}) - MIN({column}) AS range_val
-            FROM read_parquet('{self.url}') t, aoi
-            WHERE ST_Intersects(t.{self.geometry_column}, aoi.geom)
-              AND t.{column} IS NOT NULL
+                STDDEV({col}) AS std_val,
+                MAX({col}) - MIN({col}) AS range_val
+            FROM read_parquet($1) t, aoi
+            WHERE ST_Intersects(t.{geom_col}, aoi.geom)
+              AND t.{col} IS NOT NULL
             """
 
         try:
-            result = conn.execute(query).fetchone()
+            result = conn.execute(query, [self.url, wkt]).fetchone()
             std_val, range_val = result
             return {
                 "std": float(std_val) if std_val is not None else None,
@@ -564,18 +600,23 @@ class ZonalVectorService:
         """Calculate median value (unweighted)."""
         conn = self._get_connection()
 
+        # Quote identifiers to prevent SQL injection
+        col = self._quote_identifier(column)
+        geom_col = self._quote_identifier(self.geometry_column)
+
+        # Use parameter binding for url ($1) and wkt ($2)
         query = f"""
         WITH aoi AS (
-            SELECT ST_GeomFromText('{wkt}') AS geom
+            SELECT ST_GeomFromText($2) AS geom
         )
-        SELECT MEDIAN({column})
-        FROM read_parquet('{self.url}') t, aoi
-        WHERE ST_Intersects(t.{self.geometry_column}, aoi.geom)
-          AND t.{column} IS NOT NULL
+        SELECT MEDIAN({col})
+        FROM read_parquet($1) t, aoi
+        WHERE ST_Intersects(t.{geom_col}, aoi.geom)
+          AND t.{col} IS NOT NULL
         """
 
         try:
-            result = conn.execute(query).fetchone()
+            result = conn.execute(query, [self.url, wkt]).fetchone()
             return float(result[0]) if result and result[0] is not None else None
         except Exception:
             return None
@@ -584,19 +625,24 @@ class ZonalVectorService:
         """Calculate unique values."""
         conn = self._get_connection()
 
+        # Quote identifiers to prevent SQL injection
+        col = self._quote_identifier(column)
+        geom_col = self._quote_identifier(self.geometry_column)
+
+        # Use parameter binding for url ($1) and wkt ($2)
         query = f"""
         WITH aoi AS (
-            SELECT ST_GeomFromText('{wkt}') AS geom
+            SELECT ST_GeomFromText($2) AS geom
         )
-        SELECT DISTINCT {column}
-        FROM read_parquet('{self.url}') t, aoi
-        WHERE ST_Intersects(t.{self.geometry_column}, aoi.geom)
-          AND t.{column} IS NOT NULL
-        ORDER BY {column}
+        SELECT DISTINCT {col}
+        FROM read_parquet($1) t, aoi
+        WHERE ST_Intersects(t.{geom_col}, aoi.geom)
+          AND t.{col} IS NOT NULL
+        ORDER BY {col}
         """
 
         try:
-            result = conn.execute(query).fetchall()
+            result = conn.execute(query, [self.url, wkt]).fetchall()
             return [row[0] for row in result]
         except Exception:
             return []
