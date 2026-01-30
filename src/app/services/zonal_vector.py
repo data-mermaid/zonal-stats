@@ -72,17 +72,31 @@ class ZonalVectorService:
             )
 
     def _get_connection(self) -> duckdb.DuckDBPyConnection:
-        """Get or create a DuckDB connection with required extensions."""
+        """Get or create a DuckDB connection with required extensions.
+
+        Extensions should be pre-installed at build/deploy time (e.g., in Docker
+        or Lambda layer). This method attempts to LOAD them first (fast, no network).
+        Falls back to INSTALL for local development if LOAD fails.
+        """
         if self._conn is None:
             self._conn = duckdb.connect(":memory:")
-            # Install and load extensions
-            self._conn.execute("INSTALL spatial; LOAD spatial;")
-            self._conn.execute("INSTALL httpfs; LOAD httpfs;")
+            self._load_extension("spatial")
+            self._load_extension("httpfs")
             # Configure for HTTP/S3 access
             if self.url.startswith("s3://"):
                 # For S3 support - use unsigned requests for public buckets
                 self._conn.execute("SET s3_url_style='path';")
         return self._conn
+
+    def _load_extension(self, extension: str) -> None:
+        """Load a DuckDB extension, installing if necessary for local development."""
+        try:
+            self._conn.execute(f"LOAD {extension};")
+        except duckdb.IOException:
+            # Extension not pre-installed - install it (requires network)
+            # This path is for local development; production should have pre-installed
+            logger.info(f"Extension {extension} not found, installing...")
+            self._conn.execute(f"INSTALL {extension}; LOAD {extension};")
 
     def _close_connection(self):
         """Close the DuckDB connection."""

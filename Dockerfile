@@ -14,6 +14,9 @@ COPY src/ src/
 # Install Python dependencies
 RUN pip install --no-cache-dir .
 
+# Pre-install DuckDB extensions (so LOAD works without network at runtime)
+RUN python -c "import duckdb; conn = duckdb.connect(); conn.execute('INSTALL spatial'); conn.execute('INSTALL httpfs'); conn.close()"
+
 # Expose port
 EXPOSE 8000
 
