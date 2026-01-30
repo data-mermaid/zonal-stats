@@ -23,8 +23,9 @@ mkdir -p "$SCRIPT_DIR/python"
 pip install --platform manylinux2014_x86_64 --python-version 3.11 --only-binary=:all: -r "$SCRIPT_DIR/requirements.txt" -t "$SCRIPT_DIR/python/"
 
 # Pre-install DuckDB extensions so they're available at runtime without network
+# Use PYTHONPATH to import from the layer target directory we just populated
 echo "Pre-installing DuckDB extensions..."
-python3 -c "
+PYTHONPATH="$SCRIPT_DIR/python" python3 -c "
 import duckdb
 conn = duckdb.connect()
 conn.execute('INSTALL spatial')
