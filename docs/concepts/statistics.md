@@ -33,7 +33,7 @@ These are present in every response regardless of your `stats` selection:
 | `median` | Yes | Yes | Unweighted |
 | `majority` | Yes | No | Most common value (raster only) |
 | `minority` | Yes | No | Least common value (raster only) |
-| `unique` | Yes | Yes | Count of unique values (raster) or list of unique values (vector), unweighted |
+| `unique` | Yes | Yes | List of unique values, unweighted |
 | `range` | Yes | Yes | max - min, unweighted |
 | `nodata` | Yes | No | Count of nodata pixels (raster only) |
 | `freq_hist` | Yes | No | Value frequency histogram (raster only) |
