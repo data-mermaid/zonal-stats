@@ -687,15 +687,14 @@ class ZonalVectorService:
         if weighted:
             # Determine weight expression based on weighting method
             if self.weighting_method == WeightingMethod.AREA:
-                weight_expr = f"ST_Area(ST_Intersection(t.{geom_col}, aoi.geom))"
+                weight_expr = "intersection_area"
             else:
-                weight_expr = (
-                    f"ST_Area(ST_Intersection(t.{geom_col}, aoi.geom)) / "
-                    f"NULLIF(ST_Area(t.{geom_col}), 0)"
-                )
+                weight_expr = "intersection_area / NULLIF(ST_Area(t.{geom_col}), 0)"
+                weight_expr = weight_expr.format(geom_col=geom_col)
 
             # For weighted std, we need a different approach
             # Use parameter binding for url ($1) and wkt ($2)
+            # Filter intersection_area > 0 to match main intersect-mode stats
             query = f"""
             WITH aoi AS (
                 SELECT ST_GeomFromText($2) AS geom
@@ -703,16 +702,23 @@ class ZonalVectorService:
             intersected AS (
                 SELECT
                     t.{col} as value,
-                    {weight_expr} AS weight
+                    ST_Area(ST_Intersection(t.{geom_col}, aoi.geom)) AS intersection_area
                 FROM read_parquet($1) t, aoi
                 WHERE ST_Intersects(t.{geom_col}, aoi.geom)
                   AND t.{col} IS NOT NULL
+            ),
+            weighted AS (
+                SELECT
+                    value,
+                    {weight_expr} AS weight
+                FROM intersected
+                WHERE intersection_area > 0
             ),
             weighted_stats AS (
                 SELECT
                     SUM(value * weight) / NULLIF(SUM(weight), 0) AS weighted_mean,
                     SUM(weight) AS total_weight
-                FROM intersected
+                FROM weighted
             )
             SELECT
                 SQRT(
@@ -720,7 +726,7 @@ class ZonalVectorService:
                     / NULLIF(total_weight, 0)
                 ) AS weighted_std,
                 MAX(value) - MIN(value) AS range_val
-            FROM intersected, weighted_stats
+            FROM weighted, weighted_stats
             """
         else:
             # Use parameter binding for url ($1) and wkt ($2)
