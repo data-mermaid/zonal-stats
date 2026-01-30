@@ -769,7 +769,7 @@ class ZonalStatsService:
                 shapely_geom = shape(geometry.model_dump())
 
                 # Check if it's a valid polygon type
-                if not isinstance(shapely_geom, Polygon | MultiPolygon):
+                if not isinstance(shapely_geom, (Polygon, MultiPolygon)):
                     return False
 
                 # Check if the polygon is valid (no self-intersections, etc.)
