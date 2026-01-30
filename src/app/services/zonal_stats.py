@@ -669,11 +669,28 @@ class ZonalStatsService:
                     # Calculate rasterstats if there are any standard statistics
                     # requested
                     window_transform = src.window_transform(window)
+
+                    # Adjust transform for overview level to match resampled array
+                    if overview_level > 0:
+                        overviews = src.overviews(self.bands[0])
+                        overview_factor = overviews[overview_level - 1]
+                        # Scale pixel dimensions by overview factor
+                        adjusted_transform = rasterio.Affine(
+                            window_transform.a * overview_factor,
+                            window_transform.b,
+                            window_transform.c,
+                            window_transform.d,
+                            window_transform.e * overview_factor,
+                            window_transform.f,
+                        )
+                    else:
+                        adjusted_transform = window_transform
+
                     if processed_stats:
                         raster_stats_dict = zonal_stats(
                             shapely_geom,
                             band_data,
-                            affine=window_transform,
+                            affine=adjusted_transform,
                             stats=processed_stats,
                             nodata=np.nan,
                             all_touched=False,
@@ -687,7 +704,7 @@ class ZonalStatsService:
                         valid_pixel_stats = zonal_stats(
                             shapely_geom,
                             band_data,
-                            affine=window_transform,
+                            affine=adjusted_transform,
                             stats=["count"],
                             nodata=np.nan,
                             all_touched=False,
@@ -695,14 +712,9 @@ class ZonalStatsService:
                         )[0]
                         valid_count = valid_pixel_stats.get("count", 0) or 0
                         # Calculate pixel area in square meters
-                        pixel_width = abs(window_transform.a)
-                        pixel_height = abs(window_transform.e)
-                        # Adjust for overview level
-                        if overview_level > 0:
-                            overviews = src.overviews(band_idx)
-                            overview_factor = overviews[overview_level - 1]
-                            pixel_width *= overview_factor
-                            pixel_height *= overview_factor
+                        # Transform already accounts for overview scaling
+                        pixel_width = abs(adjusted_transform.a)
+                        pixel_height = abs(adjusted_transform.e)
                         # Convert to square meters if CRS is geographic
                         if src_crs.is_geographic:
                             # Approximate conversion at geometry centroid
