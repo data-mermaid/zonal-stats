@@ -308,6 +308,46 @@ class ZonalVectorService:
                 return area
         return area
 
+    def _build_intersection_select_clause(
+        self, stats: list[StatType]
+    ) -> tuple[str, list[str]]:
+        """Build SELECT clause with only requested aggregates for intersection mode.
+
+        Returns tuple of (select_clause, column_names) where column_names
+        indicates which fields are present in the result row.
+        """
+        # Always need count for COUNT and DENSITY stats
+        select_parts = ["COUNT(*) AS count"]
+        result_fields = ["count"]
+
+        # MEAN needs both total_weight and weighted_sum
+        # SUM only needs weighted_sum
+        needs_weighted_sum = StatType.MEAN in stats or StatType.SUM in stats
+        needs_total_weight = StatType.MEAN in stats
+
+        if needs_total_weight:
+            select_parts.append("SUM(weight) AS total_weight")
+            result_fields.append("total_weight")
+
+        if needs_weighted_sum:
+            select_parts.append("SUM(value * weight) AS weighted_sum")
+            result_fields.append("weighted_sum")
+
+        if StatType.MIN in stats:
+            select_parts.append("MIN(value) AS min_val")
+            result_fields.append("min_val")
+
+        if StatType.MAX in stats:
+            select_parts.append("MAX(value) AS max_val")
+            result_fields.append("max_val")
+
+        # DATA_AREA needs total intersection area
+        if StatType.DATA_AREA in stats:
+            select_parts.append("SUM(intersection_area) AS total_intersection_area")
+            result_fields.append("total_intersection_area")
+
+        return ", ".join(select_parts), result_fields
+
     def _calculate_intersection_stats(
         self,
         wkt: str,
@@ -330,6 +370,9 @@ class ZonalVectorService:
 
         # Quote geometry column identifier
         geom_col = self._quote_identifier(self.geometry_column)
+
+        # Build SELECT clause with only requested aggregates
+        select_clause, result_fields = self._build_intersection_select_clause(stats)
 
         for column in self.columns:
             # Quote column identifier to prevent SQL injection
@@ -361,53 +404,79 @@ class ZonalVectorService:
                 FROM intersected
                 WHERE intersection_area > 0
             )
-            SELECT
-                COUNT(*) AS count,
-                SUM(weight) AS total_weight,
-                SUM(value * weight) AS weighted_sum,
-                MIN(value) AS min_val,
-                MAX(value) AS max_val,
-                SUM(intersection_area) AS total_intersection_area
+            SELECT {select_clause}
             FROM weighted
             """
 
             try:
                 result = conn.execute(query, [self.url, wkt]).fetchone()
-                count, total_weight, weighted_sum, min_val, max_val, total_area = result
+
+                # Map result tuple to dict based on which fields were requested
+                result_dict = dict(zip(result_fields, result))
+                count = result_dict.get("count", 0)
 
                 # Handle empty results
                 if count == 0 or count is None:
                     results[column] = self._empty_stats(stats, aoi_area_m2)
                     continue
 
-                # Calculate weighted mean
-                weighted_mean = (
-                    weighted_sum / total_weight
-                    if total_weight and total_weight > 0
-                    else None
-                )
+                # Build stats dict with only computed values
+                stats_dict = {"count": int(count)}
+
+                # Calculate weighted mean if both components are available
+                if "weighted_sum" in result_dict and "total_weight" in result_dict:
+                    total_weight = result_dict["total_weight"]
+                    weighted_sum = result_dict["weighted_sum"]
+                    if total_weight and total_weight > 0:
+                        stats_dict["mean"] = float(weighted_sum / total_weight)
+                    else:
+                        stats_dict["mean"] = None
+                    # SUM is the weighted_sum itself
+                    if StatType.SUM in stats:
+                        stats_dict["sum"] = (
+                            float(weighted_sum) if weighted_sum is not None else None
+                        )
+                elif "weighted_sum" in result_dict and StatType.SUM in stats:
+                    # Only SUM requested, no MEAN
+                    weighted_sum = result_dict["weighted_sum"]
+                    stats_dict["sum"] = (
+                        float(weighted_sum) if weighted_sum is not None else None
+                    )
+
+                if "min_val" in result_dict:
+                    stats_dict["min"] = (
+                        float(result_dict["min_val"])
+                        if result_dict["min_val"] is not None
+                        else None
+                    )
+
+                if "max_val" in result_dict:
+                    stats_dict["max"] = (
+                        float(result_dict["max_val"])
+                        if result_dict["max_val"] is not None
+                        else None
+                    )
 
                 # Calculate density (features per km²)
-                density = count / (aoi_area_m2 / 1_000_000) if aoi_area_m2 > 0 else 0
+                if StatType.DENSITY in stats:
+                    density = (
+                        count / (aoi_area_m2 / 1_000_000) if aoi_area_m2 > 0 else 0
+                    )
+                    stats_dict["density"] = float(density)
+
+                # AOI area (computed in Python, not SQL)
+                if StatType.AOI_AREA in stats:
+                    stats_dict["aoi_area"] = float(aoi_area_m2)
 
                 # Convert data_area to square meters
-                data_area_m2 = self._convert_area_to_m2(
-                    total_area if total_area is not None else 0, vector_crs, center_lat
-                )
+                if "total_intersection_area" in result_dict:
+                    total_area = result_dict["total_intersection_area"] or 0
+                    data_area_m2 = self._convert_area_to_m2(
+                        total_area, vector_crs, center_lat
+                    )
+                    stats_dict["data_area"] = float(data_area_m2)
 
-                # Build stats dict
-                stats_dict = {
-                    "count": int(count) if count is not None else 0,
-                    "min": float(min_val) if min_val is not None else None,
-                    "max": float(max_val) if max_val is not None else None,
-                    "mean": float(weighted_mean) if weighted_mean is not None else None,
-                    "sum": float(weighted_sum) if weighted_sum is not None else None,
-                    "density": float(density),
-                    "aoi_area": float(aoi_area_m2),
-                    "data_area": float(data_area_m2),
-                }
-
-                # Calculate additional stats if requested
+                # Calculate additional stats if requested (std, range)
                 if StatType.STD in stats or StatType.RANGE in stats:
                     extra_stats = self._calculate_extra_stats(
                         column, wkt, weighted=True
@@ -432,6 +501,48 @@ class ZonalVectorService:
 
         return results
 
+    def _build_touch_select_clause(
+        self, col: str, geom_col: str, stats: list[StatType]
+    ) -> tuple[str, list[str]]:
+        """Build SELECT clause with only requested aggregates for touch mode.
+
+        Returns tuple of (select_clause, column_names) where column_names
+        indicates which fields are present in the result row.
+        """
+        # Always need count for COUNT and DENSITY stats
+        select_parts = ["COUNT(*) AS count"]
+        result_fields = ["count"]
+
+        # Map stats to their SQL aggregates
+        if StatType.MEAN in stats:
+            select_parts.append(f"AVG({col}) AS mean")
+            result_fields.append("mean")
+
+        # MIN is needed for MIN and RANGE
+        if StatType.MIN in stats or StatType.RANGE in stats:
+            select_parts.append(f"MIN({col}) AS min_val")
+            result_fields.append("min_val")
+
+        # MAX is needed for MAX and RANGE
+        if StatType.MAX in stats or StatType.RANGE in stats:
+            select_parts.append(f"MAX({col}) AS max_val")
+            result_fields.append("max_val")
+
+        if StatType.SUM in stats:
+            select_parts.append(f"SUM({col}) AS sum_val")
+            result_fields.append("sum_val")
+
+        if StatType.STD in stats:
+            select_parts.append(f"STDDEV({col}) AS std_val")
+            result_fields.append("std_val")
+
+        # Always need total_feature_area for DATA_AREA
+        if StatType.DATA_AREA in stats:
+            select_parts.append(f"SUM(ST_Area(t.{geom_col})) AS total_feature_area")
+            result_fields.append("total_feature_area")
+
+        return ", ".join(select_parts), result_fields
+
     def _calculate_touch_stats(
         self,
         wkt: str,
@@ -451,19 +562,17 @@ class ZonalVectorService:
             # Quote column identifier to prevent SQL injection
             col = self._quote_identifier(column)
 
+            # Build SELECT clause with only requested aggregates
+            select_clause, result_fields = self._build_touch_select_clause(
+                col, geom_col, stats
+            )
+
             # Use parameter binding for url ($1) and wkt ($2)
             query = f"""
             WITH aoi AS (
                 SELECT ST_GeomFromText($2) AS geom
             )
-            SELECT
-                COUNT(*) AS count,
-                AVG({col}) AS mean,
-                MIN({col}) AS min_val,
-                MAX({col}) AS max_val,
-                SUM({col}) AS sum_val,
-                STDDEV({col}) AS std_val,
-                SUM(ST_Area(t.{geom_col})) AS total_feature_area
+            SELECT {select_clause}
             FROM read_parquet($1) t, aoi
             WHERE ST_Intersects(t.{geom_col}, aoi.geom)
               AND t.{col} IS NOT NULL
@@ -471,36 +580,77 @@ class ZonalVectorService:
 
             try:
                 result = conn.execute(query, [self.url, wkt]).fetchone()
-                count, mean, min_val, max_val, sum_val, std_val, total_area = result
+
+                # Map result tuple to dict based on which fields were requested
+                result_dict = dict(zip(result_fields, result))
+                count = result_dict.get("count", 0)
 
                 # Handle empty results
                 if count == 0 or count is None:
                     results[column] = self._empty_stats(stats, aoi_area_m2)
                     continue
 
+                # Build stats dict with only computed values
+                stats_dict = {"count": int(count)}
+
+                if "mean" in result_dict:
+                    stats_dict["mean"] = (
+                        float(result_dict["mean"])
+                        if result_dict["mean"] is not None
+                        else None
+                    )
+
+                if "min_val" in result_dict:
+                    stats_dict["min"] = (
+                        float(result_dict["min_val"])
+                        if result_dict["min_val"] is not None
+                        else None
+                    )
+
+                if "max_val" in result_dict:
+                    stats_dict["max"] = (
+                        float(result_dict["max_val"])
+                        if result_dict["max_val"] is not None
+                        else None
+                    )
+
+                if "sum_val" in result_dict:
+                    stats_dict["sum"] = (
+                        float(result_dict["sum_val"])
+                        if result_dict["sum_val"] is not None
+                        else None
+                    )
+
+                if "std_val" in result_dict:
+                    stats_dict["std"] = (
+                        float(result_dict["std_val"])
+                        if result_dict["std_val"] is not None
+                        else None
+                    )
+
                 # Calculate density (features per km²)
-                density = count / (aoi_area_m2 / 1_000_000) if aoi_area_m2 > 0 else 0
+                if StatType.DENSITY in stats:
+                    density = (
+                        count / (aoi_area_m2 / 1_000_000) if aoi_area_m2 > 0 else 0
+                    )
+                    stats_dict["density"] = float(density)
+
+                # AOI area (computed in Python, not SQL)
+                if StatType.AOI_AREA in stats:
+                    stats_dict["aoi_area"] = float(aoi_area_m2)
 
                 # Convert data_area to square meters
-                data_area_m2 = self._convert_area_to_m2(
-                    total_area if total_area is not None else 0, vector_crs, center_lat
-                )
+                if "total_feature_area" in result_dict:
+                    total_area = result_dict["total_feature_area"] or 0
+                    data_area_m2 = self._convert_area_to_m2(
+                        total_area, vector_crs, center_lat
+                    )
+                    stats_dict["data_area"] = float(data_area_m2)
 
-                # Build stats dict
-                stats_dict = {
-                    "count": int(count) if count is not None else 0,
-                    "min": float(min_val) if min_val is not None else None,
-                    "max": float(max_val) if max_val is not None else None,
-                    "mean": float(mean) if mean is not None else None,
-                    "sum": float(sum_val) if sum_val is not None else None,
-                    "std": float(std_val) if std_val is not None else None,
-                    "density": float(density),
-                    "aoi_area": float(aoi_area_m2),
-                    "data_area": float(data_area_m2),
-                }
-
-                # Calculate range if requested
+                # Calculate range if requested (needs both min and max)
                 if StatType.RANGE in stats:
+                    min_val = result_dict.get("min_val")
+                    max_val = result_dict.get("max_val")
                     if min_val is not None and max_val is not None:
                         stats_dict["range"] = float(max_val - min_val)
                     else:
