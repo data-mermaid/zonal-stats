@@ -149,6 +149,9 @@ Four focused request models (one per endpoint):
   - Point with no radius or `radius=0`: `touch` mode (raw point, unweighted stats)
   - Point with `radius > 0`: `intersect` mode (buffered to polygon, area-weighted)
   - Polygon: `intersect` mode (area-weighted stats)
+- **Weighting method** (`weighting_method` parameter, default `area`):
+  - `area`: Standard areal interpolation (weight = intersection_area). Larger areas contribute more.
+  - `ratio`: Proportional weighting (weight = intersection_area / feature_area). Each feature contributes proportionally to how much is captured.
 - **CRS handling:** Reads CRS from GeoParquet metadata
 - **File format:** Only GeoParquet supported (HTTP 415 for other formats)
 

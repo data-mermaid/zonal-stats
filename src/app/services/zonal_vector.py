@@ -8,7 +8,13 @@ from pyproj import CRS, Transformer
 from shapely.geometry import shape
 from shapely.ops import transform
 
-from ..models.schemas import BandStats, PointGeometry, PolygonGeometry, StatType
+from ..models.schemas import (
+    BandStats,
+    PointGeometry,
+    PolygonGeometry,
+    StatType,
+    WeightingMethod,
+)
 from .zonal_stats import UnsupportedMediaTypeError, VectorError, create_buffer_polygon
 
 logging.basicConfig(level=logging.INFO)
@@ -35,6 +41,7 @@ class ZonalVectorService:
         columns: list[str],
         geometry_column: str = "geometry",
         intersection_mode: str = "intersect",
+        weighting_method: WeightingMethod = WeightingMethod.AREA,
         approx_stats: bool = False,
     ):
         self._validate_file_format(url)
@@ -42,6 +49,7 @@ class ZonalVectorService:
         self.columns = columns
         self.geometry_column = geometry_column
         self.intersection_mode = intersection_mode
+        self.weighting_method = weighting_method
         self.approx_stats = approx_stats  # Reserved for future optimization
         self._conn = None
 
@@ -281,6 +289,14 @@ class ZonalVectorService:
         conn = self._get_connection()
         results = {}
 
+        # Determine weight expression based on weighting method
+        if self.weighting_method == WeightingMethod.AREA:
+            # Standard areal interpolation: weight by intersection area
+            weight_expr = "intersection_area"
+        else:
+            # Ratio method: weight by proportion of feature inside AOI
+            weight_expr = "intersection_area / NULLIF(feature_area, 0)"
+
         for column in self.columns:
             # Build the query for weighted statistics
             query = f"""
@@ -303,7 +319,7 @@ class ZonalVectorService:
                     value,
                     intersection_area,
                     feature_area,
-                    intersection_area / NULLIF(feature_area, 0) AS weight
+                    {weight_expr} AS weight
                 FROM intersected
                 WHERE intersection_area > 0
             )
@@ -470,6 +486,16 @@ class ZonalVectorService:
         conn = self._get_connection()
 
         if weighted:
+            # Determine weight expression based on weighting method
+            if self.weighting_method == WeightingMethod.AREA:
+                weight_expr = "ST_Area(ST_Intersection(t.{geom_col}, aoi.geom))"
+            else:
+                weight_expr = (
+                    "ST_Area(ST_Intersection(t.{geom_col}, aoi.geom)) / "
+                    "NULLIF(ST_Area(t.{geom_col}), 0)"
+                )
+            weight_expr = weight_expr.format(geom_col=self.geometry_column)
+
             # For weighted std, we need a different approach
             query = f"""
             WITH aoi AS (
@@ -478,8 +504,7 @@ class ZonalVectorService:
             intersected AS (
                 SELECT
                     t.{column} as value,
-                    ST_Area(ST_Intersection(t.{self.geometry_column}, aoi.geom)) /
-                        NULLIF(ST_Area(t.{self.geometry_column}), 0) AS weight
+                    {weight_expr} AS weight
                 FROM read_parquet('{self.url}') t, aoi
                 WHERE ST_Intersects(t.{self.geometry_column}, aoi.geom)
                   AND t.{column} IS NOT NULL

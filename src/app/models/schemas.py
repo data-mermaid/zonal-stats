@@ -35,6 +35,19 @@ class StatType(str, Enum):
     DENSITY = "density"  # Features per km² of AOI
 
 
+class WeightingMethod(str, Enum):
+    """Weighting method for vector statistics in intersect mode.
+
+    - area: Weight by intersection area (standard areal interpolation).
+            Larger clipped areas contribute more to the result.
+    - ratio: Weight by intersection_area / feature_area.
+             Features contribute proportionally to how much of them is inside the AOI.
+    """
+
+    AREA = "area"
+    RATIO = "ratio"
+
+
 # Stats filtering constants and functions
 RASTER_ONLY_STATS = {
     StatType.NODATA,
@@ -217,6 +230,12 @@ class VectorStatsRequest(BaseModel):
     geometry_column: str = Field(
         default="geometry", description="Name of geometry column"
     )
+    weighting_method: WeightingMethod = Field(
+        default=WeightingMethod.AREA,
+        description="Weighting method for area-weighted statistics: "
+        "'area' (weight by intersection area) or "
+        "'ratio' (weight by intersection_area / feature_area)",
+    )
     approx_stats: bool = Field(
         default=False, description="Reserved for future optimization"
     )
@@ -250,6 +269,12 @@ class VectorStacStatsRequest(BaseModel):
     )
     geometry_column: str = Field(
         default="geometry", description="Name of geometry column"
+    )
+    weighting_method: WeightingMethod = Field(
+        default=WeightingMethod.AREA,
+        description="Weighting method for area-weighted statistics: "
+        "'area' (weight by intersection area) or "
+        "'ratio' (weight by intersection_area / feature_area)",
     )
     approx_stats: bool = Field(
         default=False, description="Reserved for future optimization"

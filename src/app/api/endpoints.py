@@ -144,7 +144,7 @@ async def vector_stats(request: VectorStatsRequest) -> ZonalStatsResponse:
         intersection_mode = _determine_intersection_mode(request.aoi)
         logger.info(
             f"Processing vector: {request.url}, columns: {request.columns}, "
-            f"mode: {intersection_mode}"
+            f"mode: {intersection_mode}, weighting: {request.weighting_method.value}"
         )
 
         stats = filter_vector_stats(request.stats)
@@ -154,6 +154,7 @@ async def vector_stats(request: VectorStatsRequest) -> ZonalStatsResponse:
             columns=request.columns,
             geometry_column=request.geometry_column,
             intersection_mode=intersection_mode,
+            weighting_method=request.weighting_method,
             approx_stats=request.approx_stats,
         )
         return service.calculate_stats(request.aoi, stats)
@@ -175,7 +176,10 @@ async def vector_stac_stats(request: VectorStacStatsRequest) -> ZonalStatsRespon
 
     try:
         intersection_mode = _determine_intersection_mode(request.aoi)
-        logger.info(f"Processing STAC vector: {request.url}, asset: {request.asset}")
+        logger.info(
+            f"Processing STAC vector: {request.url}, asset: {request.asset}, "
+            f"weighting: {request.weighting_method.value}"
+        )
 
         # Fetch STAC item and validate it's a GeoParquet asset
         parquet_url = validate_vector_asset(request.url, request.asset)
@@ -186,6 +190,7 @@ async def vector_stac_stats(request: VectorStacStatsRequest) -> ZonalStatsRespon
             columns=request.columns,
             geometry_column=request.geometry_column,
             intersection_mode=intersection_mode,
+            weighting_method=request.weighting_method,
             approx_stats=request.approx_stats,
         )
         return service.calculate_stats(request.aoi, stats)

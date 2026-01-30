@@ -8,7 +8,7 @@ If you omit `stats` from your request, you get:
 |------|-------------|
 | `min` | Minimum value |
 | `max` | Maximum value |
-| `mean` | Mean value (area-weighted for vector `intersect` mode) |
+| `mean` | Mean value (weighted for vector `intersect` mode, see [weighting methods](intersection-modes.md#weighting-methods)) |
 | `count` | Number of pixels (raster) or features (vector) |
 
 ## Always Included
@@ -24,17 +24,17 @@ These are present in every response regardless of your `stats` selection:
 
 | Stat | Raster | Vector | Notes |
 |------|--------|--------|-------|
-| `min` | Yes | Yes | |
-| `max` | Yes | Yes | |
-| `mean` | Yes | Yes | Area-weighted in vector `intersect` mode |
-| `count` | Yes | Yes | Pixels (raster) or features (vector) |
-| `sum` | Yes | Yes | Area-weighted in vector `intersect` mode |
-| `std` | Yes | Yes | Standard deviation |
-| `median` | Yes | Yes | |
+| `min` | Yes | Yes | Unweighted |
+| `max` | Yes | Yes | Unweighted |
+| `mean` | Yes | Yes | Weighted in vector `intersect` mode (see [weighting methods](intersection-modes.md#weighting-methods)) |
+| `count` | Yes | Yes | Pixels (raster) or features (vector), unweighted |
+| `sum` | Yes | Yes | Weighted in vector `intersect` mode |
+| `std` | Yes | Yes | Standard deviation, weighted in vector `intersect` mode |
+| `median` | Yes | Yes | Unweighted |
 | `majority` | Yes | No | Most common value (raster only) |
 | `minority` | Yes | No | Least common value (raster only) |
-| `unique` | Yes | Yes | Count of unique values (raster) or list of unique values (vector) |
-| `range` | Yes | Yes | max - min |
+| `unique` | Yes | Yes | Count of unique values (raster) or list of unique values (vector), unweighted |
+| `range` | Yes | Yes | max - min, unweighted |
 | `nodata` | Yes | No | Count of nodata pixels (raster only) |
 | `freq_hist` | Yes | No | Value frequency histogram (raster only) |
 | `density` | No | Yes | Features per km&sup2; of AOI (vector only) |

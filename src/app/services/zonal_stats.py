@@ -474,22 +474,20 @@ class ZonalStatsService:
 
                 # Check bounds
                 if row < 0 or row >= src.height or col < 0 or col >= src.width:
-                    raise GeometryError(
-                        "Point is outside the raster extent"
-                    )
+                    raise GeometryError("Point is outside the raster extent")
 
                 # Calculate pixel area in m²
                 pixel_width = abs(src.transform.a)
                 pixel_height = abs(src.transform.e)
                 if src_crs.is_geographic:
                     center_lat = lat
-                    meters_per_degree_lon = 111320 * math.cos(
-                        math.radians(center_lat)
-                    )
+                    meters_per_degree_lon = 111320 * math.cos(math.radians(center_lat))
                     meters_per_degree_lat = 110540
                     pixel_area_m2 = (
-                        pixel_width * meters_per_degree_lon
-                        * pixel_height * meters_per_degree_lat
+                        pixel_width
+                        * meters_per_degree_lon
+                        * pixel_height
+                        * meters_per_degree_lat
                     )
                 else:
                     pixel_area_m2 = pixel_width * pixel_height
@@ -544,9 +542,7 @@ class ZonalStatsService:
                         elif stat == StatType.STD:
                             stats_dict["std"] = None if is_nodata else 0.0
                         elif stat == StatType.UNIQUE:
-                            stats_dict["unique"] = (
-                                [] if is_nodata else [pixel_value]
-                            )
+                            stats_dict["unique"] = [] if is_nodata else [pixel_value]
                         elif stat == StatType.RANGE:
                             stats_dict["range"] = None if is_nodata else 0.0
                         else:
@@ -562,9 +558,7 @@ class ZonalStatsService:
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
-            raise ZonalStatsError(
-                f"Error sampling point: {str(e)}"
-            ) from e
+            raise ZonalStatsError(f"Error sampling point: {str(e)}") from e
 
     def calculate_stats(
         self, geometry: PointGeometry | PolygonGeometry, stats: list[StatType] | None

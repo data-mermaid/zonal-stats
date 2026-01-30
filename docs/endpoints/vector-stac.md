@@ -16,6 +16,7 @@ Calculate zonal statistics from a GeoParquet asset referenced by a STAC Item.
 | `columns` | `string[]` | Yes | -- | Numeric columns to compute statistics on (min 1) |
 | `geometry_column` | `string` | No | `"geometry"` | Name of the geometry column in the file |
 | `stats` | `string[]` | No | `["min","max","mean","count"]` | Statistics to compute |
+| `weighting_method` | `string` | No | `"area"` | Weighting method for `intersect` mode: `"area"` or `"ratio"`. See [weighting methods](../concepts/intersection-modes.md#weighting-methods) |
 | `approx_stats` | `boolean` | No | `false` | Reserved for future use |
 
 ## Response
