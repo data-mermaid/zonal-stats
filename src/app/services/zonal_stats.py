@@ -190,7 +190,12 @@ class ZonalStatsService:
     ) -> int:
         """
         Determine the appropriate overview level based on the window size.
-        Returns the overview level to use (0 means no overview).
+
+        Returns:
+            0 = full resolution (no overview)
+            1 = first overview (overviews[0])
+            2 = second overview (overviews[1])
+            etc.
         """
         try:
             if not self.approx_stats:
@@ -200,8 +205,9 @@ class ZonalStatsService:
             window_width = window.width
             window_height = window.height
 
-            # Get available overviews
-            overviews = src.overviews(1)  # Check overviews for band 1
+            # Get available overviews for the first requested band
+            # (bands may have different overview sets)
+            overviews = src.overviews(self.bands[0])
             if not overviews:
                 logger.info("No overviews available, using full resolution")
                 return 0
@@ -213,7 +219,10 @@ class ZonalStatsService:
             )
 
             threshold = 100_000_000
-            for level, factor in enumerate(overviews):
+            for idx, factor in enumerate(overviews):
+                # idx is 0-based, but we return 1-based (0 = full res)
+                level = idx + 1
+
                 # Calculate the effective resolution at this overview level
                 effective_pixels = total_pixels / (factor * factor)
                 logger.info(
@@ -227,18 +236,20 @@ class ZonalStatsService:
                         f"Overview level {level} would result in too few pixels "
                         f"({effective_pixels:.0f}), using previous level"
                     )
+                    # Return previous level (level - 1), but not less than 0 (full res)
                     return max(0, level - 1)
 
                 # If we're still above the threshold, continue to next level
-                if total_pixels > threshold * (1.2**level):  # More gradual increase
+                if total_pixels > threshold * (1.2**idx):  # More gradual increase
                     continue
 
                 logger.info(f"Selected overview level {level} (factor: {factor})")
                 return level
 
             # If we get here, use the highest available overview
-            logger.info(f"Using highest available overview level {len(overviews) - 1}")
-            return len(overviews) - 1
+            highest_level = len(overviews)
+            logger.info(f"Using highest available overview level {highest_level}")
+            return highest_level
         except Exception as e:
             if isinstance(e, ZonalStatsError):
                 raise
@@ -672,7 +683,7 @@ class ZonalStatsService:
 
                     # Adjust transform for overview level to match resampled array
                     if overview_level > 0:
-                        overviews = src.overviews(self.bands[0])
+                        overviews = src.overviews(band_idx)
                         overview_factor = overviews[overview_level - 1]
                         # Scale pixel dimensions by overview factor
                         adjusted_transform = rasterio.Affine(
