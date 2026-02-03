@@ -35,6 +35,9 @@ class ZonalVectorService:
         StatType.FREQ_HIST,
     }
 
+    # Common geometry column names to try as fallbacks
+    COMMON_GEOMETRY_COLUMNS = ["geometry", "geom", "the_geom", "wkb_geometry", "shape"]
+
     def __init__(
         self,
         url: str,
@@ -47,11 +50,88 @@ class ZonalVectorService:
         self._validate_file_format(url)
         self.url = url
         self.columns = columns
-        self.geometry_column = geometry_column
+        self._geometry_column_hint = geometry_column  # User-provided hint
+        self._geometry_column = None  # Will be resolved lazily
         self.intersection_mode = intersection_mode
         self.weighting_method = weighting_method
         self.approx_stats = approx_stats  # Reserved for future optimization
         self._conn = None
+
+    @property
+    def geometry_column(self) -> str:
+        """Get the geometry column name, auto-detecting if necessary."""
+        if self._geometry_column is None:
+            self._geometry_column = self._resolve_geometry_column()
+        return self._geometry_column
+
+    def _resolve_geometry_column(self) -> str:
+        """Resolve the geometry column name from metadata or fallbacks."""
+        conn = self._get_connection()
+
+        # First, get available columns
+        try:
+            result = conn.execute(
+                """
+                SELECT column_name
+                FROM (DESCRIBE SELECT * FROM read_parquet($1))
+            """,
+                [self.url],
+            ).fetchall()
+            available_columns = {row[0] for row in result}
+        except Exception as e:
+            logger.warning(f"Could not get column list: {e}")
+            return self._geometry_column_hint
+
+        # If the hint exists in the file, use it
+        if self._geometry_column_hint in available_columns:
+            logger.info(f"Using provided geometry column: {self._geometry_column_hint}")
+            return self._geometry_column_hint
+
+        # Try to read from GeoParquet metadata
+        try:
+            result = conn.execute(
+                """
+                SELECT value
+                FROM parquet_kv_metadata($1)
+                WHERE key = 'geo'
+            """,
+                [self.url],
+            ).fetchone()
+
+            if result and result[0]:
+                geo_metadata = json.loads(result[0])
+                # GeoParquet spec: primary_column indicates the primary geometry
+                primary_col = geo_metadata.get("primary_column")
+                if primary_col and primary_col in available_columns:
+                    logger.info(
+                        "Auto-detected geometry column from GeoParquet metadata: "
+                        f"{primary_col}"
+                    )
+                    return primary_col
+
+                # Also check columns dict for any geometry column
+                columns_meta = geo_metadata.get("columns", {})
+                for col_name in columns_meta:
+                    if col_name in available_columns:
+                        logger.info(
+                            f"Found geometry column in GeoParquet metadata: {col_name}"
+                        )
+                        return col_name
+        except Exception as e:
+            logger.warning(f"Could not read GeoParquet metadata: {e}")
+
+        # Try common geometry column names as fallbacks
+        for fallback in self.COMMON_GEOMETRY_COLUMNS:
+            if fallback in available_columns:
+                logger.info(f"Using fallback geometry column: {fallback}")
+                return fallback
+
+        # Last resort: use the hint and let validation fail with helpful error
+        logger.warning(
+            "Could not auto-detect geometry column, using hint: "
+            f"{self._geometry_column_hint}"
+        )
+        return self._geometry_column_hint
 
     @staticmethod
     def _quote_identifier(name: str) -> str:
@@ -151,7 +231,12 @@ class ZonalVectorService:
             return CRS.from_epsg(4326)
 
     def _validate_columns(self) -> None:
-        """Validate that requested columns exist and are numeric."""
+        """Validate that requested columns exist and are numeric.
+
+        Performs case-insensitive matching and updates self.columns with
+        the actual column names from the file. If requested columns don't
+        exist, falls back to auto-detecting numeric columns.
+        """
         try:
             conn = self._get_connection()
 
@@ -165,15 +250,20 @@ class ZonalVectorService:
             ).fetchall()
 
             available_columns = {row[0]: row[1] for row in result}
+            # Create case-insensitive lookup: lowercase -> actual name
+            columns_lower = {name.lower(): name for name in available_columns}
 
-            # Check geometry column exists
-            if self.geometry_column not in available_columns:
+            # Check geometry column exists (case-insensitive)
+            geom_col_lower = self.geometry_column.lower()
+            if geom_col_lower not in columns_lower:
                 raise VectorError(
                     f"Geometry column '{self.geometry_column}' not found in vector "
                     f"data. Available columns: {list(available_columns.keys())}"
                 )
+            # Update to actual case from file
+            self._geometry_column = columns_lower[geom_col_lower]
 
-            # Check each requested column
+            # Numeric types for validation
             numeric_types = {
                 "TINYINT",
                 "SMALLINT",
@@ -187,22 +277,56 @@ class ZonalVectorService:
                 "NUMERIC",
             }
 
+            def is_numeric_type(col_type: str) -> bool:
+                base_type = col_type.upper().split("(")[0]
+                return base_type in numeric_types
+
+            # Try to resolve requested columns (case-insensitive)
+            resolved_columns = []
+            missing_columns = []
             for col in self.columns:
-                if col not in available_columns:
+                col_lower = col.lower()
+                if col_lower not in columns_lower:
+                    missing_columns.append(col)
+                    continue
+
+                # Get actual column name from file
+                actual_col = columns_lower[col_lower]
+                col_type = available_columns[actual_col]
+
+                if is_numeric_type(col_type):
+                    resolved_columns.append(actual_col)
+                else:
+                    logger.warning(
+                        f"Column '{col}' is not numeric (type: {col_type}), skipping"
+                    )
+
+            # If no valid columns found, auto-detect numeric columns
+            if not resolved_columns:
+                logger.info(
+                    f"Requested columns not found or not numeric, auto-detecting. "
+                    f"Missing: {missing_columns}"
+                )
+                # Find all numeric columns (excluding geometry)
+                geom_col_actual = columns_lower[geom_col_lower]
+                for col_name, col_type in available_columns.items():
+                    if col_name == geom_col_actual:
+                        continue
+                    if col_name.endswith("_bbox"):  # Skip bbox columns
+                        continue
+                    if is_numeric_type(col_type):
+                        resolved_columns.append(col_name)
+
+                if not resolved_columns:
                     raise VectorError(
-                        f"Column '{col}' not found in vector data. "
+                        f"No numeric columns found in vector data. "
                         f"Available columns: {list(available_columns.keys())}"
                     )
 
-                col_type = available_columns[col].upper()
-                # Check if type is numeric (handle types like DECIMAL(18,3))
-                base_type = col_type.split("(")[0]
-                if base_type not in numeric_types:
-                    raise VectorError(
-                        f"Column '{col}' is not numeric (type: {col_type}). "
-                        f"Only numeric columns can be used for statistics."
-                    )
+                logger.info(f"Auto-detected numeric columns: {resolved_columns}")
 
+            # Update columns to use actual names from file
+            self.columns = resolved_columns
             logger.info(f"Validated columns: {self.columns}")
         except VectorError:
             raise
@@ -412,7 +536,7 @@ class ZonalVectorService:
                 result = conn.execute(query, [self.url, wkt]).fetchone()
 
                 # Map result tuple to dict based on which fields were requested
-                result_dict = dict(zip(result_fields, result))
+                result_dict = dict(zip(result_fields, result, strict=False))
                 count = result_dict.get("count", 0)
 
                 # Handle empty results
@@ -582,7 +706,7 @@ class ZonalVectorService:
                 result = conn.execute(query, [self.url, wkt]).fetchone()
 
                 # Map result tuple to dict based on which fields were requested
-                result_dict = dict(zip(result_fields, result))
+                result_dict = dict(zip(result_fields, result, strict=False))
                 count = result_dict.get("count", 0)
 
                 # Handle empty results
@@ -702,7 +826,9 @@ class ZonalVectorService:
             intersected AS (
                 SELECT
                     t.{col} as value,
-                    ST_Area(ST_Intersection(t.{geom_col}, aoi.geom)) AS intersection_area
+                    ST_Area(
+                        ST_Intersection(t.{geom_col}, aoi.geom)
+                    ) AS intersection_area
                 FROM read_parquet($1) t, aoi
                 WHERE ST_Intersects(t.{geom_col}, aoi.geom)
                   AND t.{col} IS NOT NULL
