@@ -18,7 +18,11 @@ from ..models.schemas import (
 from ..services.stac import get_asset_url as stac_get_asset_url
 from ..services.stac import validate_vector_asset
 from ..services.zonal_stats import (
-    ZonalStatsError,
+    GeometryError,
+    RasterError,
+    STACError,
+    UnsupportedMediaTypeError,
+    VectorError,
     ZonalStatsService,
 )
 from ..services.zonal_vector import ZonalVectorService
@@ -50,7 +54,9 @@ def _determine_intersection_mode(aoi: PointGeometry | PolygonGeometry) -> str:
 
 def _handle_service_error(e: Exception):
     """Convert service exceptions to HTTP exceptions."""
-    if isinstance(e, ZonalStatsError):
+    if isinstance(
+        e, (GeometryError, RasterError, STACError, VectorError, UnsupportedMediaTypeError)
+    ):
         raise HTTPException(status_code=e.status_code, detail=e.message) from None
     logger.error(f"Unexpected error: {str(e)}", exc_info=True)
     raise HTTPException(
