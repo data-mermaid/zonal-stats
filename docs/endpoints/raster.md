@@ -10,10 +10,10 @@ Calculate zonal statistics from a Cloud Optimized GeoTIFF.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `aoi` | `PointGeometry` or `PolygonGeometry` | Yes | -- | GeoJSON geometry (WGS84) |
+| `aoi` | `PointGeometry` or `PolygonGeometry` | Yes | -- | GeoJSON geometry (WGS84). Points support optional `radius` in meters. See [Geometries](../concepts/geometries.md) |
 | `url` | `string` | Yes | -- | URL to a COG. Protocols: `http://`, `https://`, `s3://`, `file://` |
 | `bands` | `int[]` | No | `[1]` | Band indices (1-based) |
-| `stats` | `string[]` | No | `["min","max","mean","count"]` | Statistics to compute |
+| `stats` | `string[]` | No | `["min","max","mean","count"]` | Statistics to compute. See [Statistics](../concepts/statistics.md) for all options |
 | `approx_stats` | `boolean` | No | `false` | Use raster overviews for faster approximate results |
 
 ## Response
@@ -66,6 +66,24 @@ Keys are `band_1`, `band_2`, etc. matching the requested bands.
     ```
 
     Returns the single pixel value under the point.
+
+=== "Point with radius"
+
+    ```bash
+    curl -X POST "http://localhost:8000/api/v1/zonal-stats/raster" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "aoi": {
+          "type": "Point",
+          "coordinates": [-0.13, 51.51],
+          "radius": 500
+        },
+        "url": "https://example.com/data.tif",
+        "stats": ["min", "max", "mean", "std"]
+      }'
+    ```
+
+    Buffers the point to a 500-meter circle and calculates zonal statistics within it.
 
 === "Approximate stats"
 

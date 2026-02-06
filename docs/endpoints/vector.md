@@ -10,11 +10,11 @@ Calculate zonal statistics from a GeoParquet file.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `aoi` | `PointGeometry` or `PolygonGeometry` | Yes | -- | GeoJSON geometry (WGS84) |
+| `aoi` | `PointGeometry` or `PolygonGeometry` | Yes | -- | GeoJSON geometry (WGS84). Points support optional `radius` in meters. See [Geometries](../concepts/geometries.md) |
 | `url` | `string` | Yes | -- | URL to a GeoParquet file (`.parquet` or `.geoparquet`). Protocols: `http://`, `https://`, `s3://`, `file://` |
 | `columns` | `string[]` | Yes | -- | Numeric columns to compute statistics on (min 1) |
 | `geometry_column` | `string` | No | `"geometry"` | Name of the geometry column in the file |
-| `stats` | `string[]` | No | `["min","max","mean","count"]` | Statistics to compute |
+| `stats` | `string[]` | No | `["min","max","mean","count"]` | Statistics to compute. See [Statistics](../concepts/statistics.md) for all options |
 | `weighting_method` | `string` | No | `"area"` | Weighting method for `intersect` mode: `"area"` or `"ratio"`. See [weighting methods](../concepts/intersection-modes.md#weighting-methods) |
 | `approx_stats` | `boolean` | No | `false` | Reserved for future use |
 
