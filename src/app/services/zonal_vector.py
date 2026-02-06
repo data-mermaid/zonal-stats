@@ -254,11 +254,12 @@ class ZonalVectorService:
             columns_lower = {name.lower(): name for name in available_columns}
 
             # Check geometry column exists (case-insensitive)
-            geom_col_lower = self.geometry_column.lower()
+            # Use the user-provided hint directly to validate before any fallback
+            geom_col_lower = self._geometry_column_hint.lower()
             if geom_col_lower not in columns_lower:
                 raise VectorError(
-                    f"Geometry column '{self.geometry_column}' not found in vector "
-                    f"data. Available columns: {list(available_columns.keys())}"
+                    f"Geometry column '{self._geometry_column_hint}' not found in "
+                    f"vector data. Available columns: {list(available_columns.keys())}"
                 )
             # Update to actual case from file
             self._geometry_column = columns_lower[geom_col_lower]
@@ -301,29 +302,19 @@ class ZonalVectorService:
                         f"Column '{col}' is not numeric (type: {col_type}), skipping"
                     )
 
-            # If no valid columns found, auto-detect numeric columns
-            if not resolved_columns:
-                logger.info(
-                    f"Requested columns not found or not numeric, auto-detecting. "
-                    f"Missing: {missing_columns}"
+            # Raise error if any requested columns were not found
+            if missing_columns:
+                raise VectorError(
+                    f"Column(s) not found in vector data: {missing_columns}. "
+                    f"Available columns: {list(available_columns.keys())}"
                 )
-                # Find all numeric columns (excluding geometry)
-                geom_col_actual = columns_lower[geom_col_lower]
-                for col_name, col_type in available_columns.items():
-                    if col_name == geom_col_actual:
-                        continue
-                    if col_name.endswith("_bbox"):  # Skip bbox columns
-                        continue
-                    if is_numeric_type(col_type):
-                        resolved_columns.append(col_name)
 
-                if not resolved_columns:
-                    raise VectorError(
-                        f"No numeric columns found in vector data. "
-                        f"Available columns: {list(available_columns.keys())}"
-                    )
-
-                logger.info(f"Auto-detected numeric columns: {resolved_columns}")
+            # Raise error if no valid numeric columns remain
+            if not resolved_columns:
+                raise VectorError(
+                    f"No numeric columns found among requested columns. "
+                    f"Available columns: {list(available_columns.keys())}"
+                )
 
             # Update columns to use actual names from file
             self.columns = resolved_columns
