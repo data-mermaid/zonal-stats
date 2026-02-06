@@ -1,0 +1,58 @@
+site_name: Zonal Statistics API
+site_description: Calculate zonal statistics from raster and vector data using GeoJSON geometries
+repo_url: https://github.com/dustin/zonal-stats
+repo_name: zonal-stats
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+    - content.tabs.link
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Endpoints:
+    - endpoints/index.md
+    - Raster (COG): endpoints/raster.md
+    - Raster (STAC): endpoints/raster-stac.md
+    - Vector (GeoParquet): endpoints/vector.md
+    - Vector (STAC): endpoints/vector-stac.md
+  - Concepts:
+    - Geometries: concepts/geometries.md
+    - Statistics: concepts/statistics.md
+    - Intersection Modes: concepts/intersection-modes.md
+  - Reference:
+    - Errors: reference/errors.md
+    - Limits: reference/limits.md
+  - Gotchas: gotchas.md

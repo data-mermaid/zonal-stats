@@ -51,3 +51,7 @@ __pycache__
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+
+# MkDocs build output
+site/
+.claude

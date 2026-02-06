@@ -6,13 +6,13 @@ import rasterio
 from requests.exceptions import RequestException, Timeout
 
 from app.models.schemas import PolygonGeometry, StatType
+from app.services.stac import get_asset_url
 from app.services.zonal_stats import (
     GeometryError,
     RasterError,
     STACError,
     ZonalStatsError,
     ZonalStatsService,
-    get_stac_asset_url,
 )
 
 # Test data
@@ -199,6 +199,6 @@ def test_stac_error_handling():
 
         # Call the function directly and verify it raises the correct error
         with pytest.raises(STACError) as exc_info:
-            get_stac_asset_url("https://example.com/stac/item.json", "visual")
+            get_asset_url("https://example.com/stac/item.json", "visual")
 
         assert "Error fetching STAC item" in str(exc_info.value)

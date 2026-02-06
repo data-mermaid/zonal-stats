@@ -42,15 +42,15 @@ def test_zonal_stats_central_london():
     assert band_stats.max == 6
 
 
-def test_point_geometry_with_buffer():
-    """Test zonal statistics calculation for a point with buffer."""
+def test_point_geometry_with_radius():
+    """Test zonal statistics calculation for a point with radius."""
     raster_path = os.path.join(
         "tests", "data", "random_centrallondon_raster_cog_001.tif"
     )
     point = {
         "type": "Point",
         "coordinates": [-0.135, 51.51],  # Central point in our test area
-        "buffer_size": 1000,  # 1km buffer
+        "radius": 1000,  # 1km radius
     }
 
     service = ZonalStatsService(url=raster_path, bands=[1], approx_stats=False)
@@ -72,25 +72,60 @@ def test_invalid_point_coordinates():
         PointGeometry(
             type="Point",
             coordinates=[200, 51.5],  # Invalid longitude
-            buffer_size=1000,
+            radius=1000,
         )
 
     with pytest.raises(ValueError):
         PointGeometry(
             type="Point",
             coordinates=[-0.135, 100],  # Invalid latitude
-            buffer_size=1000,
+            radius=1000,
         )
 
 
-def test_invalid_buffer_size():
-    """Test validation of invalid buffer size."""
+def test_invalid_radius():
+    """Test validation of negative radius."""
     with pytest.raises(ValueError):
         PointGeometry(
             type="Point",
             coordinates=[-0.135, 51.5],
-            buffer_size=-1000,  # Negative buffer size
+            radius=-1000,  # Negative radius
         )
+
+
+def test_point_without_radius():
+    """Test single-pixel sampling for a point without radius."""
+    raster_path = os.path.join(
+        "tests", "data", "random_centrallondon_raster_cog_001.tif"
+    )
+    point = {
+        "type": "Point",
+        "coordinates": [-0.135, 51.51],
+    }
+
+    service = ZonalStatsService(url=raster_path, bands=[1], approx_stats=False)
+
+    results = service.calculate_stats(
+        geometry=PointGeometry(**point),
+        stats=[
+            StatType.COUNT,
+            StatType.MEAN,
+            StatType.MIN,
+            StatType.MAX,
+            StatType.STD,
+        ],
+    )
+
+    assert "band_1" in results
+    band_stats = results["band_1"]
+    # Single pixel: count is 0 or 1
+    assert band_stats.count in (0, 1)
+    if band_stats.count == 1:
+        # For a single pixel, min == max == mean
+        assert band_stats.min == band_stats.max
+        assert band_stats.min == band_stats.mean
+        assert band_stats.std == 0.0
+    assert band_stats.aoi_area == 0.0
 
 
 def test_all_stat_types():
