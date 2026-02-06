@@ -13,7 +13,7 @@ Calculate zonal statistics from a GeoParquet file.
 | `aoi` | `PointGeometry` or `PolygonGeometry` | Yes | -- | GeoJSON geometry (WGS84). Points support optional `radius` in meters. See [Geometries](../concepts/geometries.md) |
 | `url` | `string` | Yes | -- | URL to a GeoParquet file (`.parquet` or `.geoparquet`). Protocols: `http://`, `https://`, `s3://`, `file://` |
 | `columns` | `string[]` | Yes | -- | Numeric columns to compute statistics on (min 1) |
-| `geometry_column` | `string` | No | `"geometry"` | Name of the geometry column in the file |
+| `geometry_column` | `string` | No | auto-detected | Name of the geometry column. Auto-detected from GeoParquet metadata, then common names (`geometry`, `geom`, `the_geom`, `wkb_geometry`, `shape`). Override if your file uses an unusual name |
 | `stats` | `string[]` | No | `["min","max","mean","count"]` | Statistics to compute. See [Statistics](../concepts/statistics.md) for all options |
 | `weighting_method` | `string` | No | `"area"` | Weighting method for `intersect` mode: `"area"` or `"ratio"`. See [weighting methods](../concepts/intersection-modes.md#weighting-methods) |
 | `approx_stats` | `boolean` | No | `false` | Reserved for future use |
@@ -102,4 +102,4 @@ See [Intersection Modes](../concepts/intersection-modes.md) for details.
     Only `.parquet` and `.geoparquet` files are supported. Other formats return HTTP 415.
 
 !!! info "Column validation"
-    All requested columns must exist in the file and be numeric types (integer, float, decimal). Non-numeric columns will be rejected.
+    All requested columns must exist in the file. Column names are matched **case-insensitively** against the file's actual columns. Non-numeric columns are silently skipped; an error is raised only if no valid numeric columns remain.

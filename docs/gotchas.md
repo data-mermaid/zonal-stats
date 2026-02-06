@@ -17,8 +17,8 @@ Points have no area. If you need a meaningful `aoi_area`, use a `radius` to buff
 **5. Vector endpoints only accept GeoParquet**
 Passing a GeoJSON, Shapefile, or any non-Parquet URL to a vector endpoint returns HTTP 415. Convert your data to GeoParquet first.
 
-**6. `geometry_column` defaults to `"geometry"`**
-If your GeoParquet file uses a different column name (e.g., `geom`, `the_geom`), you must set `geometry_column` explicitly.
+**6. `geometry_column` is auto-detected but can be overridden**
+The geometry column is auto-detected from GeoParquet metadata (`primary_column`), then by trying common names (`geometry`, `geom`, `the_geom`, `wkb_geometry`, `shape`). You only need to set `geometry_column` explicitly if your file uses an unusual name not in that list.
 
 **7. Empty `stats` array is rejected**
 `"stats": []` fails validation. Either omit `stats` entirely (to get defaults) or provide at least one stat.

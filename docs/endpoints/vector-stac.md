@@ -14,7 +14,7 @@ Calculate zonal statistics from a GeoParquet asset referenced by a STAC Item.
 | `url` | `string` | Yes | -- | URL to a STAC Item JSON. Protocols: `http://`, `https://` only |
 | `asset` | `string` | No | first asset | Key of the asset to use |
 | `columns` | `string[]` | Yes | -- | Numeric columns to compute statistics on (min 1) |
-| `geometry_column` | `string` | No | `"geometry"` | Name of the geometry column in the file |
+| `geometry_column` | `string` | No | auto-detected | Name of the geometry column. Auto-detected from GeoParquet metadata, then common names (`geometry`, `geom`, `the_geom`, `wkb_geometry`, `shape`). Override if your file uses an unusual name |
 | `stats` | `string[]` | No | `["min","max","mean","count"]` | Statistics to compute. See [Statistics](../concepts/statistics.md) for all options |
 | `weighting_method` | `string` | No | `"area"` | Weighting method for `intersect` mode: `"area"` or `"ratio"`. See [weighting methods](../concepts/intersection-modes.md#weighting-methods) |
 | `approx_stats` | `boolean` | No | `false` | Reserved for future use |

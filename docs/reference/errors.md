@@ -30,7 +30,7 @@ Validation errors (422) include a list of issues:
 |-----------|-----------|----------------|
 | 400 | `GeometryError` | Invalid geometry: unclosed ring, fewer than 3 points, coordinates out of range, invalid topology |
 | 400 | `RasterError` | Raster I/O failure, pixel count exceeded, band not found |
-| 400 | `VectorError` | Column not found, non-numeric column, DuckDB query failure |
+| 400 | `VectorError` | Column not found, no valid numeric columns among requested, DuckDB query failure |
 | 400 | `STACError` | STAC item fetch failed, asset not found, missing href |
 | 415 | `UnsupportedMediaTypeError` | File is not GeoParquet (vector endpoints only) |
 | 422 | `ValidationError` | Request body fails Pydantic validation |
