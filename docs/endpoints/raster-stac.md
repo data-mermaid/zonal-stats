@@ -10,11 +10,11 @@ Calculate zonal statistics from a raster asset referenced by a STAC Item.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `aoi` | `PointGeometry` or `PolygonGeometry` | Yes | -- | GeoJSON geometry (WGS84) |
+| `aoi` | `PointGeometry` or `PolygonGeometry` | Yes | -- | GeoJSON geometry (WGS84). Points support optional `radius` in meters. See [Geometries](../concepts/geometries.md) |
 | `url` | `string` | Yes | -- | URL to a STAC Item JSON. Protocols: `http://`, `https://` only |
 | `asset` | `string` | No | first asset | Key of the asset to use |
 | `bands` | `int[]` | No | `[1]` | Band indices (1-based) |
-| `stats` | `string[]` | No | `["min","max","mean","count"]` | Statistics to compute |
+| `stats` | `string[]` | No | `["min","max","mean","count"]` | Statistics to compute. See [Statistics](../concepts/statistics.md) for all options |
 | `approx_stats` | `boolean` | No | `false` | Use raster overviews for faster approximate results |
 
 ## Response
