@@ -130,25 +130,20 @@ The API will:
 
 ### Docker Deployment
 
-1. Build the Docker image:
+```bash
+# Local development with hot-reload
+docker compose up api
 
-   ```bash
-   docker build -t zonal-stats-api .
-   ```
-
-2. Run the container:
-
-   ```bash
-   docker run -p 8000:8000 zonal-stats-api
-   ```
+# Test Lambda locally with Runtime Interface Emulator
+docker compose up lambda
+```
 
 ### AWS Deployment
 
 For deploying the application to AWS using CDK, see the [Infrastructure README](infrastructure/README.md) for detailed instructions on:
 
 - Setting up the AWS environment
-- Creating the Lambda layer
-- Deploying the infrastructure
+- Deploying the Docker-based Lambda function
 - Testing the deployed API
 
 ## Development Tools

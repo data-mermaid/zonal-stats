@@ -1,0 +1,16 @@
+FROM public.ecr.aws/lambda/python:3.11
+
+# Copy project files for dependency installation
+COPY pyproject.toml README.md ${LAMBDA_TASK_ROOT}/
+
+# Copy source code
+COPY src/ ${LAMBDA_TASK_ROOT}/src/
+
+# Install Python dependencies (binary-only to avoid compiling from source)
+RUN pip install --no-cache-dir --only-binary=:all: ${LAMBDA_TASK_ROOT}/
+
+# Pre-install DuckDB extensions (so LOAD works without network at runtime)
+RUN python -c "import duckdb; conn = duckdb.connect(); conn.execute('INSTALL spatial'); conn.execute('INSTALL httpfs'); conn.close()"
+
+# Set the handler
+CMD ["app.main.handler"]

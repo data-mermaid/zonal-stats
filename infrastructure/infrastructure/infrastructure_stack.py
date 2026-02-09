@@ -21,28 +21,15 @@ class InfrastructureStack(Stack):
 
         # CloudWatch role is automatically created by cloud_watch_role=True below
 
-        # Create Lambda layer for all dependencies
-        lambda_layer = _lambda.LayerVersion(
-            self,
-            "ZonalStatsLayer",
-            code=_lambda.Code.from_asset("lambda_layer/lambda_layer.zip"),
-            compatible_runtimes=[_lambda.Runtime.PYTHON_3_11],
-            description="Layer containing all dependencies for zonal statistics API",
-        )
-
-        # Create Lambda function
-        lambda_function = _lambda.Function(
+        # Create Lambda function from Docker image
+        lambda_function = _lambda.DockerImageFunction(
             self,
             "ZonalStatsFunction",
-            runtime=_lambda.Runtime.PYTHON_3_11,
-            code=_lambda.Code.from_asset("../src"),
-            handler="app.main.handler",
-            environment={
-                "PYTHONPATH": "/var/task:/opt/python",
-            },
+            code=_lambda.DockerImageCode.from_image_asset(
+                "../", file="Dockerfile.lambda"
+            ),
             timeout=Duration.seconds(300),
             memory_size=10240,
-            layers=[lambda_layer],
         )
 
         # Create API Gateway

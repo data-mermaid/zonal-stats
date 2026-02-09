@@ -69,18 +69,22 @@ ruff format .
 ### Docker
 
 ```bash
-# Build image
-docker build -t zonal-stats-api .
+# Local development with hot-reload
+docker compose up api
 
-# Run container
-docker run -p 8000:8000 zonal-stats-api
+# Test Lambda locally with Runtime Interface Emulator
+docker compose up lambda
+curl -X POST "http://localhost:9000/2015-03-31/functions/function/invocations" \
+  -d '{"httpMethod": "GET", "path": "/docs"}'
 ```
 
 ### AWS Lambda Deployment
 
 See `infrastructure/README.md` for CDK deployment instructions. Key steps:
-1. Create Lambda layer: `cd infrastructure && ./build_layer.sh`
-2. Deploy with CDK: `cdk deploy`
+1. Ensure Docker is running
+2. Deploy with CDK: `cd infrastructure && cdk deploy`
+
+CDK builds the Docker image from `Dockerfile.lambda`, pushes to ECR, and updates Lambda automatically.
 
 The Lambda handler is created via Mangum in `src/app/main.py`.
 

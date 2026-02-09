@@ -1,0 +1,12 @@
+.git/
+infrastructure/
+tests/
+docs/
+CLAUDE.md
+docker_plan.md
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.claude/
+docker-compose.yml

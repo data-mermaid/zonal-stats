@@ -2,9 +2,9 @@
 
 This directory contains the AWS CDK infrastructure code for deploying the Zonal Statistics API. The infrastructure includes:
 
-- AWS Lambda function for processing zonal statistics
+- AWS Lambda function (Docker container image)
 - API Gateway for HTTP endpoints
-- Lambda Layer for dependencies
+- ECR repository for the Lambda container image (managed by CDK)
 
 ## Prerequisites
 
@@ -26,6 +26,8 @@ pip install -r requirements.txt
 aws configure
 ```
 
+4. Docker must be installed and running (CDK builds the Lambda image locally).
+
 ## Project Structure
 
 ```
@@ -33,44 +35,9 @@ infrastructure/               # <-- You should be in THIS directory for all depl
 ├── app.py                   # CDK app entry point
 ├── cdk.json                 # CDK configuration
 ├── requirements.txt         # CDK Python dependencies (separate from main app)
-├── infrastructure/          # Python package with CDK stack definition (don't cd here)
-│   └── infrastructure_stack.py
-└── lambda_layer/            # Lambda layer build artifacts
-    ├── build_layer.sh       # Script to build the layer
-    └── lambda_layer.zip     # Generated zip file (created by build script)
+└── infrastructure/          # Python package with CDK stack definition
+    └── infrastructure_stack.py
 ```
-
-## Creating the Lambda Layer
-
-The Lambda layer contains all the Python dependencies required by the Lambda function.
-
-**Working directory:** `infrastructure/` (the top-level infrastructure directory, not the subdirectory)
-
-1. Navigate to the infrastructure directory from project root:
-
-```bash
-cd infrastructure
-```
-
-2. Make the build script executable:
-
-```bash
-chmod +x lambda_layer/build_layer.sh
-```
-
-3. Run the build script:
-
-```bash
-./lambda_layer/build_layer.sh
-```
-
-This script will:
-- Create a temporary directory for building the layer
-- Install all required dependencies into this directory
-- Create a zip file containing the dependencies
-- Clean up temporary files
-
-The resulting `lambda_layer.zip` will be created in the `lambda_layer/` directory and will be used by CDK during deployment.
 
 ## Deployment Steps
 
@@ -81,13 +48,7 @@ The resulting `lambda_layer.zip` will be created in the `lambda_layer/` director
 - This infrastructure directory needs its own **separate** venv for AWS CDK deployment tools
 - These are two different environments for two different purposes
 
-1. Build the Lambda layer (see "Creating the Lambda Layer" section above):
-
-```bash
-./lambda_layer/build_layer.sh
-```
-
-2. Create and activate a CDK deployment virtual environment:
+1. Create and activate a CDK deployment virtual environment:
 
 ```bash
 # If you don't already have a .venv in the infrastructure/ directory:
@@ -95,22 +56,38 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
-3. Install CDK dependencies in this venv:
+2. Install CDK dependencies in this venv:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Bootstrap your AWS environment (first time only):
+3. Bootstrap your AWS environment (first time only):
 
 ```bash
 cdk bootstrap
 ```
 
-5. Deploy the stack:
+4. Deploy the stack:
 
 ```bash
 cdk deploy
+```
+
+CDK will automatically build the Docker image from `Dockerfile.lambda`, push it to ECR, and update the Lambda function.
+
+## Local Development
+
+From the **project root** directory:
+
+```bash
+# Run local API server with hot-reload
+docker compose up api
+
+# Test Lambda locally with the Runtime Interface Emulator
+docker compose up lambda
+curl -X POST "http://localhost:9000/2015-03-31/functions/function/invocations" \
+  -d '{"httpMethod": "GET", "path": "/docs"}'
 ```
 
 ## Testing the Lambda Function
@@ -143,8 +120,8 @@ When testing the Lambda function directly (not through API Gateway), use the fol
 
 ### Lambda Function
 
-- Runtime: Python 3.11
-- Memory: 2048 MB
+- Runtime: Docker container image (Python 3.11)
+- Memory: 10240 MB
 - Timeout: 300 seconds
 - Handler: app.main.handler
 
@@ -154,10 +131,6 @@ When testing the Lambda function directly (not through API Gateway), use the fol
 - Stage: v1
 - Logging: INFO level
 - CORS enabled
-
-### Lambda Layer
-
-Contains all Python dependencies required by the Lambda function.
 
 ## Cleanup
 
@@ -173,7 +146,7 @@ cdk destroy
 
 2. For Lambda function issues:
    - Check CloudWatch Logs for the Lambda function
-   - Verify the Lambda layer contains all required dependencies
+   - Ensure Docker is running when deploying (CDK builds the image locally)
    - Ensure the Lambda function has appropriate IAM permissions
 
 3. For API Gateway issues:
