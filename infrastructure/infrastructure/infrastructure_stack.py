@@ -1,3 +1,6 @@
+import hashlib
+import pathlib
+
 from aws_cdk import (
     CfnOutput,
     Duration,
@@ -74,11 +77,16 @@ class InfrastructureStack(Stack):
         # Associate the usage plan with the API stage
         usage_plan.add_api_stage(stage=api.deployment_stage)
 
+        # Force API Gateway redeployment when this stack file changes
+        stack_hash = hashlib.sha256(
+            pathlib.Path(__file__).read_bytes()
+        ).hexdigest()[:16]
+        api.latest_deployment.add_to_logical_id(stack_hash)
+
         # Create API Gateway integration with Lambda
         integration = apigw.LambdaIntegration(
             lambda_function,
             proxy=True,  # Enable proxy integration
-            content_handling=apigw.ContentHandling.CONVERT_TO_TEXT,
         )
 
         # Add root method to handle the root path "/"
