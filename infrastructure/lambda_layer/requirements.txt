@@ -9,3 +9,7 @@ shapely==2.0.2
 numpy==1.24.0
 pyproj==3.7.1
 requests==2.31.0
+geojson>=3.0.1
+duckdb>=1.0.0
+python-multipart>=0.0.6
+    
