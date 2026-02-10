@@ -294,7 +294,7 @@ class ZonalStatsService:
                     dst_crs=src_crs,
                     geom=geometry_dict,
                 )
-                return shape(transformed_geom), src_crs
+                return shape(transformed_geom), CRS.from_user_input(src_crs)
             return shape(geometry_dict), CRS.from_epsg(4326)
         except Exception as e:
             if isinstance(e, ZonalStatsError):
