@@ -3,6 +3,12 @@
 # image is built on Amazon Linux 2 (glibc 2.26) and cannot load them.
 FROM public.ecr.aws/lambda/python:3.12
 
+# Install native shared libraries not bundled in the minimal AL2023 base.
+# libexpat (expat) is required by GDAL/rasterio's XML drivers; without it the
+# rasterio import fails at runtime with "libexpat.so.1: cannot open shared
+# object file".
+RUN dnf install -y expat && dnf clean all
+
 # Copy project files for dependency installation
 COPY pyproject.toml README.md ${LAMBDA_TASK_ROOT}/
 
