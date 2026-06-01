@@ -1,4 +1,7 @@
-FROM public.ecr.aws/lambda/python:3.11
+# Amazon Linux 2023 base (glibc 2.34) — required by DuckDB's prebuilt
+# spatial/httpfs extensions, which need glibc >= 2.28. The older python:3.11
+# image is built on Amazon Linux 2 (glibc 2.26) and cannot load them.
+FROM public.ecr.aws/lambda/python:3.12
 
 # Copy project files for dependency installation
 COPY pyproject.toml README.md ${LAMBDA_TASK_ROOT}/
@@ -9,8 +12,18 @@ COPY src/ ${LAMBDA_TASK_ROOT}/src/
 # Install Python dependencies (binary-only to avoid compiling from source)
 RUN pip install --no-cache-dir --only-binary=:all: ${LAMBDA_TASK_ROOT}/
 
-# Pre-install DuckDB extensions (so LOAD works without network at runtime)
-RUN python -c "import duckdb; conn = duckdb.connect(); conn.execute('INSTALL spatial'); conn.execute('INSTALL httpfs'); conn.close()"
+# Bake DuckDB extensions into a fixed, read-only location so LOAD works at
+# runtime with no network access or /tmp download (which would also re-trigger
+# the glibc-incompatible download path). The runtime reads from this same
+# directory via DUCKDB_EXTENSION_DIRECTORY.
+ENV DUCKDB_EXTENSION_DIRECTORY=/opt/duckdb/extensions
+RUN python -c "import duckdb, os; \
+d = os.environ['DUCKDB_EXTENSION_DIRECTORY']; \
+conn = duckdb.connect(); \
+conn.execute(f\"SET extension_directory='{d}'\"); \
+conn.execute('INSTALL spatial'); \
+conn.execute('INSTALL httpfs'); \
+conn.close()"
 
 # Set the handler
 CMD ["app.main.handler"]

@@ -182,22 +182,33 @@ class ZonalVectorService:
         return self._conn
 
     def _configure_writable_dirs(self) -> None:
-        """Point DuckDB at a writable home/extension directory.
+        """Point DuckDB at a writable home and the pre-installed extensions.
 
         On AWS Lambda ``$HOME`` is unset (or non-writable), so DuckDB raises
         "Can't find the home directory at ''" the first time it needs to
         resolve extensions, secrets, or the httpfs cache. ``/tmp`` is the only
         writable location in the Lambda runtime, so use it when no usable home
-        is available. Falls back gracefully for local development.
+        is available.
+
+        ``extension_directory`` is pointed at the location where extensions are
+        baked into the image (``DUCKDB_EXTENSION_DIRECTORY``) so ``LOAD`` reads
+        the build-time copy instead of downloading at runtime — a runtime
+        download pulls a binary that may be incompatible with the image's
+        glibc. Falls back gracefully for local development.
         """
         home = os.environ.get("HOME")
         # Use /tmp when HOME is missing/empty or not writable (e.g. Lambda).
         if not home or not os.access(home, os.W_OK):
             home = "/tmp"
 
+        # Prefer the extension directory baked into the image; otherwise let
+        # DuckDB use its default under the (writable) home directory.
+        ext_dir = os.environ.get("DUCKDB_EXTENSION_DIRECTORY")
+
         try:
             self._conn.execute(f"SET home_directory='{home}';")
-            self._conn.execute(f"SET extension_directory='{home}/.duckdb/extensions';")
+            if ext_dir:
+                self._conn.execute(f"SET extension_directory='{ext_dir}';")
         except duckdb.Error as e:
             logger.warning(f"Could not configure DuckDB directories: {e}")
 
