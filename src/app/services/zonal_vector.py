@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 
 import duckdb
 from pyproj import CRS, Transformer
@@ -171,6 +172,7 @@ class ZonalVectorService:
         """
         if self._conn is None:
             self._conn = duckdb.connect(":memory:")
+            self._configure_writable_dirs()
             self._load_extension("spatial")
             self._load_extension("httpfs")
             # Configure for HTTP/S3 access
@@ -178,6 +180,26 @@ class ZonalVectorService:
                 # For S3 support - use unsigned requests for public buckets
                 self._conn.execute("SET s3_url_style='path';")
         return self._conn
+
+    def _configure_writable_dirs(self) -> None:
+        """Point DuckDB at a writable home/extension directory.
+
+        On AWS Lambda ``$HOME`` is unset (or non-writable), so DuckDB raises
+        "Can't find the home directory at ''" the first time it needs to
+        resolve extensions, secrets, or the httpfs cache. ``/tmp`` is the only
+        writable location in the Lambda runtime, so use it when no usable home
+        is available. Falls back gracefully for local development.
+        """
+        home = os.environ.get("HOME")
+        # Use /tmp when HOME is missing/empty or not writable (e.g. Lambda).
+        if not home or not os.access(home, os.W_OK):
+            home = "/tmp"
+
+        try:
+            self._conn.execute(f"SET home_directory='{home}';")
+            self._conn.execute(f"SET extension_directory='{home}/.duckdb/extensions';")
+        except duckdb.Error as e:
+            logger.warning(f"Could not configure DuckDB directories: {e}")
 
     def _load_extension(self, extension: str) -> None:
         """Load a DuckDB extension, installing if necessary for local development."""
