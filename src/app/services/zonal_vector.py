@@ -43,7 +43,7 @@ class ZonalVectorService:
         self,
         url: str,
         columns: list[str],
-        geometry_column: str = "geometry",
+        geometry_column: str = "",
         intersection_mode: str = "intersect",
         weighting_method: WeightingMethod = WeightingMethod.AREA,
         approx_stats: bool = False,
@@ -61,7 +61,7 @@ class ZonalVectorService:
     @property
     def geometry_column(self) -> str:
         """Get the geometry column name, auto-detecting if necessary."""
-        if self._geometry_column is None:
+        if not self._geometry_column:
             self._geometry_column = self._resolve_geometry_column()
         return self._geometry_column
 
@@ -286,14 +286,20 @@ class ZonalVectorService:
             # Create case-insensitive lookup: lowercase -> actual name
             columns_lower = {name.lower(): name for name in available_columns}
 
-            # Check geometry column exists (case-insensitive)
-            # Use the user-provided hint directly to validate before any fallback
+            # Check geometry column exists (case-insensitive). Try the user hint
+            # first; if it isn't present, fall back to auto-detection via
+            # GeoParquet metadata and common column names (e.g. "geom").
             geom_col_lower = self._geometry_column_hint.lower()
+            if not geom_col_lower:
+                # No hint provided — auto-detect via metadata / common names.
+                geom_col_lower = self.geometry_column.lower()
             if geom_col_lower not in columns_lower:
                 raise VectorError(
-                    f"Geometry column '{self._geometry_column_hint}' not found in "
-                    f"vector data. Available columns: {list(available_columns.keys())}"
+                    f"Geometry column '{self._geometry_column_hint}' "
+                    f"not found in vector data. "
+                    f"Available columns: {list(available_columns.keys())}"
                 )
+
             # Update to actual case from file
             self._geometry_column = columns_lower[geom_col_lower]
 
