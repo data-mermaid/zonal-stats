@@ -228,7 +228,7 @@ class VectorStatsRequest(BaseModel):
         ..., description="Numeric columns to calculate statistics for", min_length=1
     )
     geometry_column: str = Field(
-        default="geometry", description="Name of geometry column"
+        default="", description="Name of geometry column"
     )
     weighting_method: WeightingMethod = Field(
         default=WeightingMethod.AREA,
