@@ -157,6 +157,39 @@ def test_point_outside_raster_extent():
     assert band_stats.data_area is None
 
 
+def test_buffered_point_outside_raster_extent():
+    """A buffered point (radius > 0) outside the raster returns null stats.
+
+    This exercises the polygon code path (create_buffer_polygon -> intersects
+    check), distinct from the no-radius _sample_point path above.
+    """
+    raster_path = os.path.join(
+        "tests", "data", "random_centrallondon_raster_cog_001.tif"
+    )
+    # Far from the central London test raster
+    point = {
+        "type": "Point",
+        "coordinates": [10.0, 10.0],
+        "radius": 1000,
+    }
+
+    service = ZonalStatsService(url=raster_path, bands=[1], approx_stats=False)
+
+    results = service.calculate_stats(
+        geometry=PointGeometry(**point),
+        stats=[StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
+    )
+
+    assert "band_1" in results
+    band_stats = results["band_1"]
+    assert band_stats.count is None
+    assert band_stats.mean is None
+    # A buffered point has area, so aoi_area is reported even outside the extent.
+    assert band_stats.aoi_area is not None
+    assert band_stats.aoi_area > 0
+    assert band_stats.data_area is None
+
+
 def test_polygon_outside_raster_extent():
     """A polygon outside the raster returns null stats."""
     raster_path = os.path.join(
