@@ -39,7 +39,7 @@ If your AOI exceeds 1M km&sup2; or 100M pixels, the request fails with a 400 unl
 For polygon or buffered-point queries, `mean` is weighted by the intersection area ratio, not a simple average. This is intentional -- a feature half-inside your AOI contributes half its value.
 
 **13. Empty results return `null`, not `0`**
-An AOI that falls outside the raster's extent -- or one that lands inside the extent but covers only masked (nodata) pixels -- returns `null` for every statistic. This keeps an empty result distinct from a real value of `0`. `aoi_area` is still reported, since it describes your query geometry. See [Statistics](concepts/statistics.md#no-data-within-the-aoi).
+An AOI that falls outside the raster's extent -- or one that lands inside the extent but covers only masked (nodata) pixels -- returns `null` for every statistic. This keeps an empty result distinct from a real value of `0`, but collapses the distinction between `null` cell value and no value at all (undefined). `aoi_area` is still reported, since it describes your query geometry. See [Statistics](concepts/statistics.md#no-data-within-the-aoi).
 
 **14. Raster stats may differ slightly from QGIS/GDAL**
 
