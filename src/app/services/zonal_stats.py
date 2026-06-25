@@ -6,7 +6,7 @@ import rasterio
 from pyproj import CRS, Transformer
 from rasterio.warp import transform_geom
 from rasterstats import zonal_stats
-from shapely.geometry import MultiPolygon, Point, Polygon, shape
+from shapely.geometry import MultiPolygon, Point, Polygon, box, shape
 from shapely.ops import transform
 
 from ..models.schemas import BandStats, PointGeometry, PolygonGeometry, StatType
@@ -412,29 +412,21 @@ class ZonalStatsService:
                 raise
             raise RasterError(f"Error handling nodata values: {str(e)}") from e
 
-    def _raster_extent_polygon(self, src: rasterio.io.DatasetReader) -> Polygon:
-        """Build the raster's georeferenced extent as a polygon in the raster CRS."""
-        transform = src.transform
-        height, width = src.height, src.width
-        corners = [(0, 0), (width, 0), (width, height), (0, height)]
-        world_corners = [transform * corner for corner in corners]
-        return Polygon(world_corners)
-
     def _out_of_coverage_band_stats(
-        self, stats: list[StatType], aoi_area: float | None = None
+        self, stats: list[StatType], aoi_area: float
     ) -> BandStats:
         """Build a BandStats with null/empty values for a geometry outside coverage.
 
         The AOI area describes the query geometry itself, not the data, so it is
-        still reported when provided even though the AOI falls outside coverage.
+        still reported even though the AOI falls outside coverage.
         """
-        band_stats_dict: dict = {"coverage": False}
+        band_stats_dict: dict = {}
         for stat in stats:
             if stat == StatType.FREQ_HIST:
                 band_stats_dict[stat.value] = {}
             elif stat == StatType.UNIQUE:
                 band_stats_dict[stat.value] = []
-            elif stat == StatType.AOI_AREA and aoi_area is not None:
+            elif stat == StatType.AOI_AREA:
                 band_stats_dict[stat.value] = float(aoi_area)
             else:
                 # Numeric stats (including data_area, count, nodata) are null
@@ -512,8 +504,6 @@ class ZonalStatsService:
                 # Get pixel row/col
                 row, col = src.index(x, y)
 
-                # Check bounds. If the point is outside the raster extent, return
-                # null statistics with coverage=False rather than raising.
                 if row < 0 or row >= src.height or col < 0 or col >= src.width:
                     # A point AOI has no area; report 0.0 to match the
                     # in-coverage point path.
@@ -643,7 +633,7 @@ class ZonalStatsService:
                 )
 
                 # If the AOI falls entirely outside the raster's data extent,
-                # return null statistics with coverage=False rather than
+                # return null statistics rather than
                 # silently reading off-raster (which yields all-nodata stats
                 # indistinguishable from a real data gap).
                 base_stats = (
@@ -657,7 +647,7 @@ class ZonalStatsService:
                 # reported regardless of whether the AOI overlaps the raster.
                 aoi_area = self._calculate_area_in_square_meters(shapely_geom, geom_crs)
 
-                if not shapely_geom.intersects(self._raster_extent_polygon(src)):
+                if not shapely_geom.intersects(box(*src.bounds)):
                     return {
                         f"band_{band_idx}": self._out_of_coverage_band_stats(
                             stats_to_use, aoi_area=aoi_area
