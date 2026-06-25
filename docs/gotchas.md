@@ -38,7 +38,10 @@ If your AOI exceeds 1M km&sup2; or 100M pixels, the request fails with a 400 unl
 **12. Vector `mean` is area-weighted in `intersect` mode**
 For polygon or buffered-point queries, `mean` is weighted by the intersection area ratio, not a simple average. This is intentional -- a feature half-inside your AOI contributes half its value.
 
-**13. Raster stats may differ slightly from QGIS/GDAL**
+**13. Empty results return `null`, not `0`**
+An AOI that falls outside the raster's extent -- or one that lands inside the extent but covers only masked (nodata) pixels -- returns `null` for every statistic. This keeps an empty result distinct from a real value of `0`. `aoi_area` is still reported, since it describes your query geometry. See [Statistics](concepts/statistics.md#no-data-within-the-aoi).
+
+**14. Raster stats may differ slightly from QGIS/GDAL**
 
 This API uses `rasterstats` with `rasterio.features.rasterize()` for polygon-to-pixel masking, while QGIS uses GDAL's `gdal_rasterize`. These implement the same conceptual rule (center-of-pixel) but differ slightly at polygon boundaries.
 

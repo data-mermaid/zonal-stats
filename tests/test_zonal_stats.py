@@ -128,6 +128,72 @@ def test_point_without_radius():
     assert band_stats.aoi_area == 0.0
 
 
+def test_point_outside_raster_extent():
+    """A point outside the raster returns null stats."""
+    raster_path = os.path.join(
+        "tests", "data", "random_centrallondon_raster_cog_001.tif"
+    )
+    # Far from the central London test raster
+    point = {
+        "type": "Point",
+        "coordinates": [10.0, 10.0],
+    }
+
+    service = ZonalStatsService(url=raster_path, bands=[1], approx_stats=False)
+
+    results = service.calculate_stats(
+        geometry=PointGeometry(**point),
+        stats=[StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
+    )
+
+    assert "band_1" in results
+    band_stats = results["band_1"]
+    assert band_stats.count is None
+    assert band_stats.mean is None
+    assert band_stats.min is None
+    assert band_stats.max is None
+    # A point AOI has no area, but aoi_area is still reported.
+    assert band_stats.aoi_area == 0.0
+    assert band_stats.data_area is None
+
+
+def test_polygon_outside_raster_extent():
+    """A polygon outside the raster returns null stats."""
+    raster_path = os.path.join(
+        "tests", "data", "random_centrallondon_raster_cog_001.tif"
+    )
+    # Far from the central London test raster
+    polygon = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [10.0, 10.0],
+                [10.01, 10.0],
+                [10.01, 10.01],
+                [10.0, 10.01],
+                [10.0, 10.0],
+            ]
+        ],
+    }
+
+    service = ZonalStatsService(url=raster_path, bands=[1], approx_stats=False)
+
+    results = service.calculate_stats(
+        geometry=PolygonGeometry(**polygon),
+        stats=[StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
+    )
+
+    assert "band_1" in results
+    band_stats = results["band_1"]
+    assert band_stats.count is None
+    assert band_stats.mean is None
+    # aoi_area describes the query geometry, so it is reported even when the
+    # AOI falls outside the raster extent.
+    assert band_stats.aoi_area is not None
+    assert band_stats.aoi_area > 0
+    assert band_stats.data_area is None
+
+
 def test_all_stat_types():
     """Test calculation of all available statistics."""
     raster_path = os.path.join(

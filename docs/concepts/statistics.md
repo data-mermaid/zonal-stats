@@ -20,6 +20,18 @@ These are present in every response regardless of your `stats` selection:
 | `aoi_area` | Area of your AOI in square meters |
 | `data_area` | Area of data within the AOI in square meters |
 
+## No Data Within the AOI
+
+Statistics are `null` whenever the AOI captures no valid data. This happens in two cases:
+
+- The AOI falls entirely **outside the raster's extent**.
+- The AOI is **within the raster's extent but covers only masked (nodata) pixels**.
+
+In both cases the numeric stats (`min`, `max`, `mean`, `count`, etc.) are returned as `null` rather than as zeros, so an empty result is distinguishable from a real data value of `0`.
+
+!!! note "`aoi_area` is always reported"
+    `aoi_area` describes your query geometry, not the data, so it is returned even when every statistic is `null`. `data_area` is `null` (or `0`) in this case, since no valid data was found.
+
 ## Compatibility Matrix
 
 | Stat | Raster | Vector | Notes |
