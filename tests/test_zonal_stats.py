@@ -3,7 +3,7 @@ import os
 import pytest
 
 from app.models.schemas import PointGeometry, PolygonGeometry, StatType
-from app.services.zonal_stats import ZonalStatsService
+from app.services.zonal_stats import RasterError, ZonalStatsService
 
 
 def test_zonal_stats_central_london():
@@ -227,13 +227,12 @@ def test_polygon_outside_raster_extent():
     assert band_stats.data_area is None
 
 
-def test_multi_band_outside_raster_extent():
-    """An out-of-extent AOI returns null stats for every requested band.
+def test_out_of_coverage_returns_null_for_each_requested_band():
+    """An out-of-extent AOI returns null stats for every valid requested band.
 
     The out-of-coverage early return builds its result dict by iterating
-    ``self.bands`` before any pixel data is read, so this exercises multi-band
-    propagation even though the test fixture is single-band -- the early return
-    fires before band indexes are validated against the raster.
+    ``self.bands`` before any pixel data is read, so this exercises band
+    propagation through the early return path.
     """
     raster_path = os.path.join(
         "tests", "data", "random_centrallondon_raster_cog_001.tif"
@@ -252,7 +251,7 @@ def test_multi_band_outside_raster_extent():
         ],
     }
 
-    service = ZonalStatsService(url=raster_path, bands=[1, 2, 3], approx_stats=False)
+    service = ZonalStatsService(url=raster_path, bands=[1], approx_stats=False)
 
     results = service.calculate_stats(
         geometry=PolygonGeometry(**polygon),
@@ -260,7 +259,7 @@ def test_multi_band_outside_raster_extent():
     )
 
     # Every requested band is present with null stats.
-    assert set(results) == {"band_1", "band_2", "band_3"}
+    assert set(results) == {"band_1"}
     for band_stats in results.values():
         assert band_stats.count is None
         assert band_stats.mean is None
@@ -270,6 +269,39 @@ def test_multi_band_outside_raster_extent():
         assert band_stats.aoi_area is not None
         assert band_stats.aoi_area > 0
         assert band_stats.data_area is None
+
+
+def test_invalid_band_outside_raster_extent_raises():
+    """An invalid band index is rejected even when the AOI is out of coverage.
+
+    Band validity must not depend on whether the AOI happens to intersect the
+    raster: requesting a band the raster does not have should fail consistently
+    whether the AOI is inside or outside the data extent.
+    """
+    raster_path = os.path.join(
+        "tests", "data", "random_centrallondon_raster_cog_001.tif"
+    )
+    # Far from the central London test raster (single-band fixture)
+    polygon = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [10.0, 10.0],
+                [10.01, 10.0],
+                [10.01, 10.01],
+                [10.0, 10.01],
+                [10.0, 10.0],
+            ]
+        ],
+    }
+
+    service = ZonalStatsService(url=raster_path, bands=[1, 2, 3], approx_stats=False)
+
+    with pytest.raises(RasterError):
+        service.calculate_stats(
+            geometry=PolygonGeometry(**polygon),
+            stats=[StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
+        )
 
 
 def test_all_stat_types():

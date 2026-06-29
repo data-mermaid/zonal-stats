@@ -412,6 +412,21 @@ class ZonalStatsService:
                 raise
             raise RasterError(f"Error handling nodata values: {str(e)}") from e
 
+    def _validate_bands(self, src: rasterio.io.DatasetReader) -> None:
+        """Ensure every requested band exists in the raster.
+
+        Called before any early return (e.g. out-of-coverage AOIs) so that an
+        invalid ``bands`` request fails consistently regardless of whether the
+        AOI happens to intersect the raster's data extent.
+        """
+        invalid_bands = [b for b in self.bands if b not in src.indexes]
+        if invalid_bands:
+            raise RasterError(
+                f"Band {invalid_bands[0]} not found in raster"
+                if len(invalid_bands) == 1
+                else f"Bands {invalid_bands} not found in raster"
+            )
+
     def _out_of_coverage_band_stats(
         self, stats: list[StatType], aoi_area: float
     ) -> BandStats:
@@ -512,6 +527,9 @@ class ZonalStatsService:
                 row, col = src.index(x, y)
 
                 if row < 0 or row >= src.height or col < 0 or col >= src.width:
+                    # Validate band indices even when out of coverage so an
+                    # invalid bands request fails regardless of AOI location.
+                    self._validate_bands(src)
                     # A point AOI has no area; report 0.0 to match the
                     # in-coverage point path.
                     return {
@@ -655,6 +673,9 @@ class ZonalStatsService:
                 aoi_area = self._calculate_area_in_square_meters(shapely_geom, geom_crs)
 
                 if not shapely_geom.intersects(box(*src.bounds)):
+                    # Validate band indices even when out of coverage so an
+                    # invalid bands request fails regardless of AOI location.
+                    self._validate_bands(src)
                     return {
                         f"band_{band_idx}": self._out_of_coverage_band_stats(
                             stats_to_use, aoi_area=aoi_area
