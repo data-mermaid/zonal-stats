@@ -227,6 +227,51 @@ def test_polygon_outside_raster_extent():
     assert band_stats.data_area is None
 
 
+def test_multi_band_outside_raster_extent():
+    """An out-of-extent AOI returns null stats for every requested band.
+
+    The out-of-coverage early return builds its result dict by iterating
+    ``self.bands`` before any pixel data is read, so this exercises multi-band
+    propagation even though the test fixture is single-band -- the early return
+    fires before band indexes are validated against the raster.
+    """
+    raster_path = os.path.join(
+        "tests", "data", "random_centrallondon_raster_cog_001.tif"
+    )
+    # Far from the central London test raster
+    polygon = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [10.0, 10.0],
+                [10.01, 10.0],
+                [10.01, 10.01],
+                [10.0, 10.01],
+                [10.0, 10.0],
+            ]
+        ],
+    }
+
+    service = ZonalStatsService(url=raster_path, bands=[1, 2, 3], approx_stats=False)
+
+    results = service.calculate_stats(
+        geometry=PolygonGeometry(**polygon),
+        stats=[StatType.COUNT, StatType.MEAN, StatType.MIN, StatType.MAX],
+    )
+
+    # Every requested band is present with null stats.
+    assert set(results) == {"band_1", "band_2", "band_3"}
+    for band_stats in results.values():
+        assert band_stats.count is None
+        assert band_stats.mean is None
+        assert band_stats.min is None
+        assert band_stats.max is None
+        # aoi_area describes the query geometry and is reported on every band.
+        assert band_stats.aoi_area is not None
+        assert band_stats.aoi_area > 0
+        assert band_stats.data_area is None
+
+
 def test_all_stat_types():
     """Test calculation of all available statistics."""
     raster_path = os.path.join(

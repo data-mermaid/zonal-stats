@@ -30,7 +30,7 @@ Statistics are `null` whenever the AOI captures no valid data. This happens in t
 In both cases the numeric stats (`min`, `max`, `mean`, `count`, etc.) are returned as `null` rather than as zeros, so an empty result is distinguishable from a real data value of `0`.
 
 !!! note "`aoi_area` is always reported"
-    `aoi_area` describes your query geometry, not the data, so it is returned even when every statistic is `null`. `data_area` is `null` (or `0`) in this case, since no valid data was found.
+    `aoi_area` describes your query geometry, not the data, so it is returned even when every statistic is `null`. `data_area` reflects that no valid data was found: it is `null` for **raster** endpoints (no valid pixels) and `0` for **vector** endpoints (no intersecting features).
 
 ## Compatibility Matrix
 

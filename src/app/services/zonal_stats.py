@@ -419,8 +419,15 @@ class ZonalStatsService:
 
         The AOI area describes the query geometry itself, not the data, so it is
         still reported even though the AOI falls outside coverage.
+
+        Note: ``count`` and ``nodata`` are intentionally ``None`` here, unlike the
+        in-coverage path (``_process_band_stats``) which reports ``0`` for an
+        empty/all-nodata window. The distinction is deliberate: ``None`` means
+        "the AOI is outside coverage, so no count exists", whereas ``0`` means
+        "the AOI is inside coverage but no valid pixels were found". This keeps an
+        out-of-coverage result distinguishable from a real in-coverage count of 0.
         """
-        band_stats_dict: dict = {}
+        band_stats_dict: dict[str, dict | list | float | None] = {}
         for stat in stats:
             if stat == StatType.FREQ_HIST:
                 band_stats_dict[stat.value] = {}
