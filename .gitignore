@@ -38,7 +38,7 @@ Thumbs.db
 # Project specific
 data/
 !tests/data/
-*.log 
+*.log
 .venv/
 infrastructure/lambda_layer/lambda_layer.zip
 
@@ -60,3 +60,6 @@ site/
 
 # Node (CDK CLI)
 node_modules/
+
+# Environment variables
+.envrc
