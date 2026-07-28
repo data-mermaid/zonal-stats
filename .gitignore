@@ -55,3 +55,6 @@ cdk.out
 # MkDocs build output
 site/
 .claude
+
+# Node (CDK CLI)
+node_modules/

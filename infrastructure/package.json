@@ -1,0 +1,8 @@
+{
+  "name": "infrastructure",
+  "private": true,
+  "description": "Pins the AWS CDK CLI used to deploy the Zonal Statistics API.",
+  "devDependencies": {
+    "aws-cdk": "2.1029.4"
+  }
+}
