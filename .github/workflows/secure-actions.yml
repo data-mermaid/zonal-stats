@@ -5,7 +5,7 @@ name: secure-actions
 
 on:
   push:
-    branches: [master, dev]
+    branches: [master, main, dev, develop]
   pull_request:
   workflow_dispatch:
 
