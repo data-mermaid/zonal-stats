@@ -43,9 +43,7 @@ data/
 infrastructure/lambda_layer/lambda_layer.zip
 
 *.swp
-package-lock.json
-# pins the CDK CLI for `npm ci` in deploy.yml
-!infrastructure/package-lock.json
+/package-lock.json
 __pycache__
 .pytest_cache
 *.egg-info

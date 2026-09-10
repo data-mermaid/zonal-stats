@@ -5,7 +5,7 @@ name: secure-actions
 
 on:
   push:
-    branches: [master, main, dev, develop]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -54,6 +54,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: sparkgeo/github-actions/.github/actions/zizmor@349a429e52e0ee3c79345ac70f5e9e38b97cffaf
-        with:
-          advanced-security: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      # The composite takes no inputs and hardcodes advanced-security: true, so
+      # it always uploads SARIF. Fork PRs get a read-only token and would fail
+      # that upload, so skip the step entirely for them.
+      - if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: sparkgeo/github-actions/.github/actions/zizmor@349a429e52e0ee3c79345ac70f5e9e38b97cffaf

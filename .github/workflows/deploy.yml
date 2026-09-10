@@ -79,10 +79,10 @@ jobs:
         if: github.event_name == 'push'
         run: |
           cd infrastructure
-          npx cdk deploy --require-approval never
+          npx --no cdk deploy --require-approval never
 
       - name: CDK Diff
         if: github.event_name == 'pull_request'
         run: |
           cd infrastructure
-          npx cdk diff
+          npx --no cdk diff
